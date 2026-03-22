@@ -414,6 +414,38 @@ def existing_path(meta: Dict[str, Any], key: str) -> Optional[Path]:
 
 
 def state_report(meta: Dict[str, Any]) -> Dict[str, Any]:
+    local_file_exists = bool(existing_path(meta, "local_file"))
+    wav_exists = bool(existing_path(meta, "wav_path"))
+    transcript_exists = bool(existing_path(meta, "transcript_path"))
+    has_summary = bool(meta.get("summary_appended_blocks"))
+    verification = meta.get("verification")
+    cleanup = meta.get("cleanup")
+
+    if not meta.get("bvid"):
+        next_action = "resolve_info"
+    elif not local_file_exists:
+        next_action = "download_video"
+    elif not wav_exists and not transcript_exists:
+        next_action = "extract_audio"
+    elif not transcript_exists:
+        next_action = "transcribe_audio"
+    elif not meta.get("download_url"):
+        next_action = "upload_video"
+    elif not meta.get("page_id"):
+        next_action = "create_or_update_notion_page"
+    elif not meta.get("written_transcript_blocks"):
+        next_action = "write_transcript_blocks"
+    elif not has_summary:
+        next_action = "append_summary_optional"
+    elif not verification:
+        next_action = "verify_page"
+    elif cleanup is None:
+        next_action = "cleanup_optional"
+    elif verification and verification.get("ok"):
+        next_action = "done"
+    else:
+        next_action = "inspect_verification_failure"
+
     return {
         "state": meta.get("state"),
         "bvid": meta.get("bvid"),
@@ -421,12 +453,14 @@ def state_report(meta: Dict[str, Any]) -> Dict[str, Any]:
         "page_id": meta.get("page_id"),
         "notion_url": meta.get("notion_url"),
         "download_url": meta.get("download_url"),
-        "local_file_exists": bool(existing_path(meta, "local_file")),
-        "wav_exists": bool(existing_path(meta, "wav_path")),
-        "transcript_exists": bool(existing_path(meta, "transcript_path")),
-        "has_summary": bool(meta.get("summary_appended_blocks")),
-        "verification": meta.get("verification"),
-        "cleanup": meta.get("cleanup"),
+        "local_file_exists": local_file_exists,
+        "wav_exists": wav_exists,
+        "transcript_exists": transcript_exists,
+        "has_summary": has_summary,
+        "verification": verification,
+        "cleanup": cleanup,
+        "resume_ready": bool(meta.get("source_url") or meta.get("video_url")),
+        "next_action": next_action,
         "metadata_path": meta.get("metadata_path"),
     }
 

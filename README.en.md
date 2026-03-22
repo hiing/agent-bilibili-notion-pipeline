@@ -149,53 +149,90 @@ Then fill in your real values.
 
 ---
 
-### 2) Run `prepare`
+### 2) Run `run` as the default entrypoint
+
+This is now the recommended path:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "https://b23.tv/xxxxx" \
+  --cleanup-mode temp
+```
+
+If you already have a Markdown summary prepared:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "https://b23.tv/xxxxx" \
+  --markdown-file /path/to/summary.md \
+  --require-summary \
+  --cleanup-mode temp
+```
+
+This executes the full common workflow:
+- download video
+- extract audio
+- transcribe
+- upload mp4
+- create/update Notion page
+- write transcript blocks
+- optionally append summary
+- verify page structure
+- clean temporary files
+
+The JSON output usually contains:
+
+- `bvid`
+- `title`
+- `video_url`
+- `local_file`
+- `transcript_path`
+- `page_id`
+- `notion_url`
+- `download_url`
+- `metadata_path`
+- `verification`
+- `cleanup`
+
+---
+
+### 3) Use `prepare` for step-by-step mode
+
+If you want to stop after transcript/body writing and add the summary manually later:
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
   --url "https://b23.tv/xxxxx"
 ```
 
-This step tries to complete:
-- video download
-- audio extraction
-- transcription
-- mp4 upload
-- Notion page creation/update
-- transcript body writing
+If you already know the target Notion page:
 
-The command returns JSON with fields like:
-
-- `bvid`
-- `title`
-- `video_url`
-- `local_file`
-- `wav_path`
-- `transcript_path`
-- `page_id`
-- `notion_url`
-- `download_url`
-- `metadata_path`
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
+  --url "<link>" \
+  --page-id "<notion_page_id>" \
+  --replace-children
+```
 
 ---
 
-### 3) Add a summary (two valid ways)
+### 4) Inspect saved state with `state`
 
-#### Option A: manual / template-based
-Read `transcript_path`, then write your own Markdown summary.
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py state \
+  --metadata /path/to/BVxxxx.metadata.json
+```
 
-#### Option B: agent-generated
-Let an agent read the transcript and write a more natural summary covering:
-- `## Structure`
-- `## Core Thesis`
-- `## Key Concepts`
-
-Reference:
-- `skill/bilibili-notion-pipeline/references/summary-template.md`
+Useful for checking:
+- which step the workflow stopped at
+- whether local mp4 / wav / transcript still exist
+- whether a summary has already been appended
+- what the latest verification result was
+- what the next suggested action is
 
 ---
 
-### 4) Append the summary to Notion
+### 5) Append a summary to Notion
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
@@ -205,13 +242,54 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
 
 ---
 
-### 5) Cleanup temporary files
+### 6) Verify the page with `verify`
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py verify \
+  --metadata /path/to/BVxxxx.metadata.json \
+  --require-summary
+```
+
+It checks:
+- transcript title heading exists
+- body heading exists
+- transcript paragraphs exist
+- summary-related sections exist (when `--require-summary` is enabled)
+
+The command exits non-zero when verification fails.
+
+---
+
+### 7) Resume an interrupted run with `resume`
+
+If a long run was interrupted, or the transcript body exists but the later steps did not finish:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
+  --metadata /path/to/BVxxxx.metadata.json \
+  --cleanup-mode temp
+```
+
+If you want to resume and append a summary in the same step:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
+  --metadata /path/to/BVxxxx.metadata.json \
+  --markdown-file /path/to/summary.md \
+  --require-summary \
+  --cleanup-mode temp
+```
+
+---
+
+### 8) Cleanup with explicit modes
 
 Delete wav / transcript only:
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
-  --metadata /path/to/BVxxxx.metadata.json
+  --metadata /path/to/BVxxxx.metadata.json \
+  --mode temp
 ```
 
 Delete wav / transcript / local video:
@@ -219,7 +297,7 @@ Delete wav / transcript / local video:
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata /path/to/BVxxxx.metadata.json \
-  --delete-video
+  --mode all
 ```
 
 ---
