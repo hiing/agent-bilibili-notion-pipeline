@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 from yt_dlp import YoutubeDL
@@ -40,6 +40,14 @@ from notion_markdown import markdown_to_blocks  # noqa: E402
 
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
+
+
+def write_json(path: Path, payload: Dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def progress(message: str) -> None:
+    print(f"[pipeline] {message}", file=sys.stderr, flush=True)
 
 
 def slug_title(text: str, max_len: int = 120) -> str:
@@ -258,6 +266,7 @@ def notion_list_children(block_id: str) -> List[Dict[str, Any]]:
     headers = notion_headers()
     items: List[Dict[str, Any]] = []
     cursor: Optional[str] = None
+
     while True:
         params = {"page_size": 100}
         if cursor:
@@ -326,31 +335,100 @@ def transcript_blocks(video_url: str, download_url: Optional[str], transcript_te
     return blocks
 
 
-def save_metadata(payload: Dict[str, Any], bvid: str) -> Path:
+def save_metadata(payload: Dict[str, Any], bvid: str, meta_path: Optional[Path] = None) -> Path:
     ensure_dir(TEMP_DIR)
-    meta_path = TEMP_DIR / f"{bvid}.metadata.json"
-    meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return meta_path
+    target = meta_path or (TEMP_DIR / f"{bvid}.metadata.json")
+    write_json(target, payload)
+    return target
 
 
-def cmd_prepare(args: argparse.Namespace) -> None:
-    info = fetch_video_info(args.url)
-    title = info.get("title") or args.url
-    video_url = info.get("webpage_url") or args.url
-    bvid = extract_bvid(video_url if "BV" in video_url else args.url)
-    local_file = download_video(args.url, title, bvid)
+def rich_text_plain(items: List[Dict[str, Any]]) -> str:
+    parts: List[str] = []
+    for item in items or []:
+        if item.get("plain_text"):
+            parts.append(item["plain_text"])
+        elif item.get("text", {}).get("content"):
+            parts.append(item["text"]["content"])
+    return "".join(parts)
+
+
+def block_plain_text(block: Dict[str, Any]) -> str:
+    block_type = block.get("type")
+    payload = block.get(block_type or "", {})
+    if isinstance(payload, dict) and payload.get("rich_text"):
+        return rich_text_plain(payload.get("rich_text", []))
+    return ""
+
+
+def verify_page(page_id: str, require_summary: bool = False) -> Dict[str, Any]:
+    children = notion_list_children(page_id)
+    texts = [block_plain_text(block).strip() for block in children]
+    headings = [
+        text for block, text in zip(children, texts)
+        if block.get("type") in {"heading_1", "heading_2", "heading_3"} and text
+    ]
+
+    def has_any(keywords: List[str]) -> bool:
+        return any(any(keyword in text for keyword in keywords) for text in texts)
+
+    report = {
+        "page_id": page_id,
+        "block_count": len(children),
+        "paragraph_count": sum(1 for block in children if block.get("type") == "paragraph"),
+        "headings": headings,
+        "has_title_heading": has_any(["整理字幕"]),
+        "has_body_heading": has_any(["正文"]),
+        "has_structure_section": has_any(["结构梳理", "文章结构整理", "精要观点"]),
+        "has_core_section": has_any(["核心观点"]),
+        "has_concepts_section": has_any(["关键概念", "概念速查"]),
+    }
+    report["has_summary_section"] = any([
+        report["has_structure_section"],
+        report["has_core_section"],
+        report["has_concepts_section"],
+    ])
+    report["ok"] = (
+        report["has_title_heading"]
+        and report["has_body_heading"]
+        and report["paragraph_count"] > 0
+        and (not require_summary or report["has_summary_section"])
+    )
+    return report
+
+
+def prepare_pipeline(url: str, page_id: Optional[str], replace_children: bool) -> Dict[str, Any]:
+    progress("解析视频信息")
+    info = fetch_video_info(url)
+    title = info.get("title") or url
+    video_url = info.get("webpage_url") or url
+    bvid = extract_bvid(video_url if "BV" in video_url else url)
+
+    progress("下载视频")
+    local_file = download_video(url, title, bvid)
+
+    progress("抽取音频")
     wav_path = extract_audio(local_file, bvid)
+
+    progress("转写音频")
     transcript_path = transcribe_audio(wav_path, bvid)
+
+    progress("上传视频")
     download_url = upload_video(local_file)
 
-    page = notion_create_or_update_page(title, video_url, download_url, args.page_id)
+    progress("创建或更新 Notion 页面")
+    page = notion_create_or_update_page(title, video_url, download_url, page_id)
     pid = page["id"]
-    if args.replace_children:
+    if replace_children:
+        progress("归档旧页面 children")
         notion_archive_all_children(pid)
+
+    progress("写入字幕正文 blocks")
     transcript_text = transcript_path.read_text(encoding="utf-8")
-    notion_append_blocks(pid, transcript_blocks(video_url, download_url, transcript_text))
+    blocks = transcript_blocks(video_url, download_url, transcript_text)
+    notion_append_blocks(pid, blocks)
 
     payload = {
+        "state": "prepared",
         "bvid": bvid,
         "title": title,
         "video_url": video_url,
@@ -360,18 +438,69 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         "page_id": pid,
         "notion_url": page.get("url") or page_url(pid),
         "download_url": download_url,
+        "replace_children": replace_children,
+        "written_transcript_blocks": len(blocks),
     }
     metadata_path = save_metadata(payload, bvid)
     payload["metadata_path"] = str(metadata_path)
+    save_metadata(payload, bvid, metadata_path)
+    return payload
+
+
+def resolve_page_id(page_id: Optional[str], metadata: Optional[str]) -> str:
+    if page_id:
+        return page_id
+    if metadata:
+        return json.loads(Path(metadata).read_text(encoding="utf-8"))["page_id"]
+    raise RuntimeError("page_id is required")
+
+
+def append_summary_to_notion(page_id: str, markdown: str) -> Dict[str, Any]:
+    progress("追加 Markdown 总结到 Notion")
+    blocks = markdown_to_blocks(markdown)
+    notion_append_blocks(page_id, blocks)
+    return {"page_id": page_id, "appended_blocks": len(blocks)}
+
+
+def cleanup_from_meta(meta: Dict[str, Any], mode: str = "temp") -> Dict[str, Any]:
+    deleted: List[str] = []
+    kept: List[str] = []
+
+    for key in ("wav_path", "transcript_path"):
+        path_value = meta.get(key)
+        if not path_value:
+            continue
+        path = Path(path_value)
+        if mode in {"temp", "all"} and path.exists():
+            path.unlink()
+            deleted.append(str(path))
+        elif path.exists():
+            kept.append(str(path))
+
+    video_value = meta.get("local_file")
+    if video_value:
+        video_path = Path(video_value)
+        if mode == "all" and video_path.exists():
+            video_path.unlink()
+            deleted.append(str(video_path))
+        elif video_path.exists():
+            kept.append(str(video_path))
+
+    for key in ("metadata_path", "notion_url", "download_url"):
+        value = meta.get(key)
+        if value:
+            kept.append(str(value))
+
+    return {"mode": mode, "deleted": deleted, "kept": kept}
+
+
+def cmd_prepare(args: argparse.Namespace) -> None:
+    payload = prepare_pipeline(args.url, args.page_id, args.replace_children)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def cmd_append_summary(args: argparse.Namespace) -> None:
-    page_id = args.page_id
-    if args.metadata and not page_id:
-        page_id = json.loads(Path(args.metadata).read_text(encoding="utf-8"))["page_id"]
-    if not page_id:
-        raise RuntimeError("page_id is required")
+    page_id = resolve_page_id(args.page_id, args.metadata)
 
     if args.markdown_file:
         markdown = Path(args.markdown_file).read_text(encoding="utf-8")
@@ -380,31 +509,55 @@ def cmd_append_summary(args: argparse.Namespace) -> None:
     else:
         raise RuntimeError("Provide --markdown-file or --text")
 
-    blocks = markdown_to_blocks(markdown)
-    notion_append_blocks(page_id, blocks)
-    print(json.dumps({"page_id": page_id, "appended_blocks": len(blocks)}, ensure_ascii=False, indent=2))
+    result = append_summary_to_notion(page_id, markdown)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def cmd_verify(args: argparse.Namespace) -> None:
+    page_id = resolve_page_id(args.page_id, args.metadata)
+    report = verify_page(page_id, require_summary=args.require_summary)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if not report["ok"]:
+        raise SystemExit(2)
 
 
 def cmd_cleanup(args: argparse.Namespace) -> None:
     meta = json.loads(Path(args.metadata).read_text(encoding="utf-8"))
-    deleted: List[str] = []
-    kept: List[str] = []
+    mode = "all" if args.delete_video else args.mode
+    result = cleanup_from_meta(meta, mode)
+    meta["cleanup"] = result
+    meta["state"] = "cleaned" if mode != "none" else meta.get("state", "prepared")
+    if meta.get("metadata_path"):
+        save_metadata(meta, meta.get("bvid", "metadata"), Path(meta["metadata_path"]))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
-    for key in ("wav_path", "transcript_path"):
-        path = Path(meta[key])
-        if path.exists():
-            path.unlink()
-            deleted.append(str(path))
 
-    video_path = Path(meta["local_file"])
-    if args.delete_video and video_path.exists():
-        video_path.unlink()
-        deleted.append(str(video_path))
-    elif video_path.exists():
-        kept.append(str(video_path))
+def cmd_run(args: argparse.Namespace) -> None:
+    payload = prepare_pipeline(args.url, args.page_id, args.replace_children)
+    meta_path = Path(payload["metadata_path"])
 
-    kept.extend([meta.get("notion_url", ""), meta.get("download_url", "")])
-    print(json.dumps({"deleted": deleted, "kept": [x for x in kept if x]}, ensure_ascii=False, indent=2))
+    summary_markdown: Optional[str] = None
+    if args.markdown_file:
+        summary_markdown = Path(args.markdown_file).read_text(encoding="utf-8")
+    elif args.text:
+        summary_markdown = args.text
+
+    if summary_markdown:
+        payload["summary"] = append_summary_to_notion(payload["page_id"], summary_markdown)
+
+    progress("回读校验 Notion 页面")
+    verification = verify_page(payload["page_id"], require_summary=bool(summary_markdown) or args.require_summary)
+    payload["verification"] = verification
+
+    if args.cleanup_mode != "none":
+        progress(f"清理本地文件 ({args.cleanup_mode})")
+        payload["cleanup"] = cleanup_from_meta(payload, args.cleanup_mode)
+
+    payload["state"] = "completed" if verification["ok"] else "verification_failed"
+    save_metadata(payload, payload["bvid"], meta_path)
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    if not verification["ok"]:
+        raise SystemExit(2)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -425,10 +578,28 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--text", help="Raw markdown text")
     p.set_defaults(func=cmd_append_summary)
 
+    p = sub.add_parser("verify", help="read back and verify Notion page structure")
+    p.add_argument("--page-id", help="Notion page id")
+    p.add_argument("--metadata", help="metadata json from prepare/run")
+    p.add_argument("--require-summary", action="store_true", help="Require summary-related sections to be present")
+    p.set_defaults(func=cmd_verify)
+
     p = sub.add_parser("cleanup", help="delete temp artifacts")
-    p.add_argument("--metadata", required=True, help="metadata json from prepare")
-    p.add_argument("--delete-video", action="store_true", help="also delete the local mp4")
+    p.add_argument("--metadata", required=True, help="metadata json from prepare/run")
+    p.add_argument("--mode", choices=["none", "temp", "all"], default="temp", help="Cleanup mode: temp=delete wav/txt, all=also delete video")
+    p.add_argument("--delete-video", action="store_true", help="Backward-compatible alias for --mode all")
     p.set_defaults(func=cmd_cleanup)
+
+    p = sub.add_parser("run", help="one-shot pipeline: prepare -> optional summary -> verify -> cleanup")
+    p.add_argument("--url", required=True, help="Bilibili or b23 URL")
+    p.add_argument("--page-id", help="Existing Notion page id")
+    p.add_argument("--replace-children", action="store_true", help="Archive existing top-level children before writing transcript")
+    group = p.add_mutually_exclusive_group(required=False)
+    group.add_argument("--markdown-file", help="Optional markdown summary file to append")
+    group.add_argument("--text", help="Optional raw markdown summary text to append")
+    p.add_argument("--require-summary", action="store_true", help="Require summary-related sections during verification")
+    p.add_argument("--cleanup-mode", choices=["none", "temp", "all"], default="temp", help="Cleanup mode after verification")
+    p.set_defaults(func=cmd_run)
 
     return parser
 

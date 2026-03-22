@@ -50,7 +50,40 @@ description: Skill-first Bilibili to Notion pipeline. Download a Bilibili/b23 vi
 
 ## 标准流程
 
-### 1）执行 `prepare`
+### 推荐：一键 `run`
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "<b23或BV链接>" \
+  --cleanup-mode temp
+```
+
+如果已经有人写好了 Markdown 总结：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "<b23或BV链接>" \
+  --markdown-file /path/to/summary.md \
+  --require-summary \
+  --cleanup-mode temp
+```
+
+`run` 会按顺序执行：
+
+1. 解析视频
+2. 下载视频
+3. 抽取音频
+4. 转写正文
+5. 上传视频
+6. 创建 / 更新 Notion 页面
+7. 写入正文 blocks
+8. 可选追加 Markdown 总结
+9. 回读校验页面结构
+10. 清理本地中间文件
+
+### 分步模式（需要人工插入总结时）
+
+#### 1）执行 `prepare`
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare --url "<b23或BV链接>"
@@ -73,7 +106,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
 - `metadata_path`
 - `download_url`
 
-### 2）阅读转写正文
+#### 2）阅读转写正文
 
 用 `read` 读取 `transcript_path`，判断：
 
@@ -82,26 +115,20 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
 - 是否需要人工干预
 - 文后总结应该如何组织
 
-### 3）补文后总结（两种方式都可以）
+#### 3）补文后总结
 
-#### 方式 A：人工 / 模板生成
-直接按固定结构写 Markdown：
+先按固定结构写 Markdown：
 
 - `## 结构梳理`
 - `## 核心观点`
 - `## 关键概念`
-
-#### 方式 B：agent 生成
-让 agent 阅读转写结果后，再生成更自然的总结。
 
 可参考：
 
 - `references/summary-template.md`
 - `references/workflow.md`
 
-### 4）把总结追加到 Notion
-
-先把 Markdown 写到临时文件，再追加：
+#### 4）把总结追加到 Notion
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
@@ -109,7 +136,15 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
   --markdown-file "/path/to/summary.md"
 ```
 
-### 5）按需清理
+#### 5）回读校验
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py verify \
+  --metadata "<metadata_path>" \
+  --require-summary
+```
+
+#### 6）按需清理
 
 默认建议删除：
 
@@ -120,7 +155,8 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
-  --metadata "<metadata_path>"
+  --metadata "<metadata_path>" \
+  --mode temp
 ```
 
 如果用户明确不要保留视频：
@@ -128,7 +164,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata "<metadata_path>" \
-  --delete-video
+  --mode all
 ```
 
 ## 进度回报要求
@@ -142,7 +178,8 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 3. 已上传并拿到 `download_url`
 4. 已写入 Notion 正文
 5. 已补文后总结
-6. 已清理 / 保留了哪些本地文件
+6. 已完成回读校验
+7. 已清理 / 保留了哪些本地文件
 
 ## 注意事项
 
