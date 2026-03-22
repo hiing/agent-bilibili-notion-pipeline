@@ -119,9 +119,10 @@ This repository treats the upload backend as a **replaceable component**, but th
 
 - `https://stor.pull.eu.org/`
 
-This capability was not built entirely from scratch. It clearly **benefits from** the ideas and implementation foundation provided by:
+This capability was not built entirely from scratch. It clearly **benefits from** the ideas, implementation foundation, and already well-shaped upload interface provided by:
 
 - `https://github.com/MarSeventh/CloudFlare-ImgBed`
+- Upload API docs: `https://cfbed.sanyue.de/api/upload.html`
 
 What matters here is not just “an image bed / public file link”, but several practical properties behind it.
 
@@ -134,7 +135,28 @@ For this pipeline, WebDAV matters because it makes the storage layer more useful
 
 So in practice, it behaves less like “just an upload API” and more like a **lightweight file layer**.
 
-#### 2) Telegram-group-based “effectively huge” storage is powerful — but risky
+#### 2) The built-in Upload API is also a strong integration surface
+According to its public upload API docs, the program itself exposes something more useful than a hidden form endpoint behind a web panel — it already provides a fairly practical programmable upload layer:
+
+- standard `POST /upload` + `multipart/form-data`, easy to call from almost any language or script
+- supports both `authCode` and `API Token`, which makes third-party automation and agent-side integration cleaner
+- supports `uploadChannel` and `channelName` for explicit routing across multiple backends
+- supports `autoRetry` so failed uploads can automatically retry on another channel
+- supports `uploadFolder`, `uploadNameType`, and `returnFormat`, making naming, directory structure, and return shape controllable
+- is not limited to image-oriented use cases; it can also cleanly support this kind of “upload video first, then write download_url into Notion” workflow
+
+That matters because for a pipeline like this, the real value is not merely “there is a UI that can upload files”, but:
+
+> **the upload action has already been abstracted into a programmable API layer.**
+
+That means the upload stage can be:
+- called directly from Python scripts
+- orchestrated by agent workflows
+- reused by future automation tasks
+
+So it behaves more like an **embeddable upload backend**, not just a dashboard product.
+
+#### 3) Telegram-group-based “effectively huge” storage is powerful — but risky
 One of the strongest attractions of this kind of setup is the ability to lean on **Telegram groups / channels** as the file-bearing layer, which creates a very cheap and capacity-friendly storage experience.
 
 But this must be stated clearly:
@@ -154,13 +176,21 @@ If you depend on it long-term, you should still keep:
 - local retention of metadata / transcripts
 - an escape plan for switching upload backends later
 
-#### 3) Chunked upload is one of its most practical strengths
-For video workflows, chunked upload is not cosmetic — it is operationally important:
+#### 4) Chunked upload is one of its most practical strengths
+For video workflows, chunked upload is not cosmetic — it is operationally important.
+
+According to the API docs, chunked upload is explicitly split into:
+- initialization via `initChunked=true`
+- chunk upload via `chunked=true`
+- final merge via `merge=true`
+
+That means:
 
 - large files become more robust to upload
 - unstable networks hurt less
 - long videos and larger mp4 files become much more manageable
 - retries become cheaper after interruption
+- upload logic can be resumed explicitly instead of always falling back to full re-upload
 
 For this Bilibili → Notion pipeline, the value is simple:
 
