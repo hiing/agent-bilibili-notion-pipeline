@@ -167,7 +167,63 @@
 
 而分片机制对这些问题都有缓冲作用。
 
-### 推荐安装的运行依赖
+### 存储架构 / 数据流
+
+```text
+Bilibili Link
+   ↓
+Resolve metadata (title / bvid / canonical url)
+   ↓
+Download mp4 to local
+   ↓
+Extract wav with ffmpeg
+   ↓
+ASR transcription
+  ├─ short audio → direct transcription
+  └─ long audio  → segmented transcription → merge transcript
+   ↓
+Upload mp4 to self-hosted backend
+   ↓
+Get public download_url
+   ↓
+Create / update Notion page
+   ├─ write properties (title / URL / download_url)
+   ├─ write transcript blocks
+   └─ optionally append Markdown summary
+   ↓
+Verify page structure
+   ↓
+Cleanup temp artifacts
+```
+
+### 当前默认存储形态（实践视角）
+
+```text
+本地 mp4 / wav / txt
+   ↓
+上传到 https://stor.pull.eu.org/
+   ↓
+后端能力受益于 CloudFlare-ImgBed 方案
+   ↓
+可通过 WebDAV 管理远端文件
+   ↓
+对外提供 download_url
+   ↓
+Notion 页面只保存结构化内容 + 公开下载链接
+```
+
+这一层设计的重点，不是追求“最正规”，而是追求：
+
+- 足够稳
+- 成本低
+- 可迁移
+- 对长视频友好
+
+也因此，建议把它理解成：
+
+> **一个实用的工程化存储层，而不是零风险的永久归档系统。**
+
+### 运行依赖
 
 - Python 3.10+
 - `ffmpeg`

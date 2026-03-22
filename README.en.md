@@ -165,6 +165,62 @@ And that matters a lot, because in long workflows the fragile point is often not
 
 Chunked upload helps buffer all of those problems.
 
+### Storage architecture / data flow
+
+```text
+Bilibili Link
+   ↓
+Resolve metadata (title / bvid / canonical url)
+   ↓
+Download mp4 to local
+   ↓
+Extract wav with ffmpeg
+   ↓
+ASR transcription
+  ├─ short audio → direct transcription
+  └─ long audio  → segmented transcription → merge transcript
+   ↓
+Upload mp4 to self-hosted backend
+   ↓
+Get public download_url
+   ↓
+Create / update Notion page
+   ├─ write properties (title / URL / download_url)
+   ├─ write transcript blocks
+   └─ optionally append Markdown summary
+   ↓
+Verify page structure
+   ↓
+Cleanup temp artifacts
+```
+
+### Default storage shape in practice
+
+```text
+local mp4 / wav / txt
+   ↓
+upload to https://stor.pull.eu.org/
+   ↓
+backend capability benefits from the CloudFlare-ImgBed approach
+   ↓
+manage remote files through WebDAV
+   ↓
+expose public download_url
+   ↓
+Notion stores structured content + public download link
+```
+
+The point of this layer is not “formal perfection”, but:
+
+- enough stability
+- low cost
+- portability
+- better tolerance for long videos
+
+So it is best understood as:
+
+> **a practical engineered storage layer, not a zero-risk permanent archive system.**
+
 ### Runtime dependencies
 
 - Python 3.10+
