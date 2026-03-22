@@ -100,6 +100,8 @@ There are a few keys and paths that must be prepared before the pipeline becomes
 | Whisper model | `WHISPER_MODEL` | e.g. `small`, `medium` |
 | Whisper language | `WHISPER_LANGUAGE` | usually `zh` |
 | Whisper compute type | `WHISPER_COMPUTE_TYPE` | e.g. `float16`, `int8`, or `auto` |
+| ASR segment threshold | `ASR_AUTO_SEGMENT_MINUTES` | Auto-enable segmented transcription above this duration |
+| ASR segment length | `ASR_SEGMENT_SECONDS` | Segment duration in seconds, default `600` |
 
 ### Runtime dependencies
 

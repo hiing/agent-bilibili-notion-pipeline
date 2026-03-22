@@ -101,6 +101,8 @@
 | Whisper 模型 | `WHISPER_MODEL` | 如 `small` / `medium` |
 | Whisper 语言 | `WHISPER_LANGUAGE` | 通常是 `zh` |
 | Whisper 计算类型 | `WHISPER_COMPUTE_TYPE` | 如 `float16` / `int8`，留空或 `auto` 表示自动 |
+| ASR 分段阈值 | `ASR_AUTO_SEGMENT_MINUTES` | 超过多少分钟自动启用分段转写 |
+| ASR 分段时长 | `ASR_SEGMENT_SECONDS` | 每段多少秒，默认 600 |
 
 ### 推荐安装的运行依赖
 

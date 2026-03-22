@@ -33,6 +33,8 @@ BILI_COOKIES_FILE = os.getenv("BILI_COOKIES_FILE", "")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "zh")
 WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "auto")
+ASR_SEGMENT_SECONDS = int(os.getenv("ASR_SEGMENT_SECONDS", "600"))
+ASR_AUTO_SEGMENT_MINUTES = int(os.getenv("ASR_AUTO_SEGMENT_MINUTES", "20"))
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from notion_markdown import markdown_to_blocks  # noqa: E402
@@ -125,6 +127,32 @@ def extract_audio(video_path: Path, bvid: str) -> Path:
     return wav_path
 
 
+def audio_duration_seconds(path: Path) -> float:
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return float(result.stdout.strip() or 0)
+
+
+def split_audio_segments(wav_path: Path, bvid: str, segment_seconds: int) -> List[Path]:
+    ensure_dir(TEMP_DIR)
+    segment_pattern = TEMP_DIR / f"{bvid}_seg_%03d.wav"
+    run([
+        "ffmpeg", "-y", "-i", str(wav_path),
+        "-f", "segment", "-segment_time", str(segment_seconds),
+        "-c", "copy", str(segment_pattern),
+    ])
+    return sorted(TEMP_DIR.glob(f"{bvid}_seg_*.wav"))
+
+
 def normalize_transcript(text: str) -> str:
     text = text.replace("\r", "\n")
     if OpenCC is not None:
@@ -156,29 +184,53 @@ def normalize_transcript(text: str) -> str:
 def transcribe_audio(wav_path: Path, bvid: str) -> Path:
     ensure_dir(TEMP_DIR)
     txt_path = TEMP_DIR / f"{bvid}.txt"
+    duration = audio_duration_seconds(wav_path)
+    use_segments = duration >= ASR_AUTO_SEGMENT_MINUTES * 60
+
+    if use_segments:
+        progress(f"长音频检测：{duration/60:.1f} 分钟，启用分段转写")
+        segment_paths = split_audio_segments(wav_path, bvid, ASR_SEGMENT_SECONDS)
+    else:
+        segment_paths = [wav_path]
+
+    text_parts: List[str] = []
 
     try:
         from faster_whisper import WhisperModel  # type: ignore
 
         model = WhisperModel(WHISPER_MODEL, compute_type=WHISPER_COMPUTE_TYPE)
-        segments, _info = model.transcribe(str(wav_path), language=WHISPER_LANGUAGE, vad_filter=True)
-        text = "".join(seg.text for seg in segments)
+        for seg_path in segment_paths:
+            segments, _info = model.transcribe(str(seg_path), language=WHISPER_LANGUAGE, vad_filter=True)
+            text_parts.append("".join(seg.text for seg in segments))
     except Exception:
         whisper_bin = shutil.which("whisper")
         if not whisper_bin:
             raise RuntimeError("Neither faster-whisper nor whisper CLI is available")
-        run([
-            whisper_bin,
-            str(wav_path),
-            "--model", WHISPER_MODEL,
-            "--language", WHISPER_LANGUAGE,
-            "--output_dir", str(TEMP_DIR),
-            "--output_format", "txt",
-        ])
-        raw_txt = TEMP_DIR / f"{wav_path.stem}.txt"
-        text = raw_txt.read_text(encoding="utf-8")
+        for seg_path in segment_paths:
+            run([
+                whisper_bin,
+                str(seg_path),
+                "--model", WHISPER_MODEL,
+                "--language", WHISPER_LANGUAGE,
+                "--output_dir", str(TEMP_DIR),
+                "--output_format", "txt",
+            ])
+            raw_txt = TEMP_DIR / f"{seg_path.stem}.txt"
+            text_parts.append(raw_txt.read_text(encoding="utf-8"))
 
+    text = "\n".join(text_parts)
     txt_path.write_text(normalize_transcript(text), encoding="utf-8")
+
+    if use_segments:
+        for seg_path in segment_paths:
+            try:
+                seg_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            seg_txt = TEMP_DIR / f"{seg_path.stem}.txt"
+            if seg_txt.exists():
+                seg_txt.unlink()
+
     return txt_path
 
 
