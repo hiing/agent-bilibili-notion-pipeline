@@ -106,7 +106,7 @@ python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py prepare \
 ```bash
 python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py append-summary \
   --page-id "<page_id>" \
-  --markdown-file "/tmp/summary.md"
+  --markdown-file "/path/to/summary.md"
 ```
 
 ### 5）按需清理
