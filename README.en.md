@@ -40,16 +40,16 @@ It is trying to do one thing well:
 
 If reduced to one sentence, this skill turns:
 
-> **video link (Bilibili first, also extendable to YouTube and other mainstream video sites) → original video retention → transcript generation → storage upload → Notion archiving → outline summary**
+> **video link (Bilibili first, also extendable to YouTube and other mainstream video sites) → Whisper / ASR subtitle body → storage upload → Notion archiving → outline summary placed below the subtitle body**
 
 into a real executable chain.
 
 More concretely, it directly helps you:
 
-- take a video link and actually execute parsing, download, audio extraction, transcription, upload, and Notion writing; Bilibili is the most mature path today, while YouTube and other yt-dlp-supported sites are also within scope
+- take a video link and actually execute parsing, download, audio extraction, Whisper / ASR transcription, upload, and Notion writing; Bilibili is the most mature path today, while YouTube and other yt-dlp-supported sites are also within scope
 - save the original video into your chosen cloud drive, storage backend, or self-hosted upload service instead of leaving it as a temporary OpenClaw artifact only
-- write the body into a durable, editable Notion page
-- append structured summary, outline, core thesis, and key concepts after the body
+- turn Whisper / ASR output into a durable, editable **subtitle body** inside a Notion page
+- append structured summary, outline, core thesis, and key concepts **below that subtitle body**
 - report stage-based progress during long runs instead of staying silent
 - clean up most process junk at the end while preserving the knowledge trace and necessary metadata
 
@@ -68,9 +68,10 @@ More concretely, it directly helps you:
 - The original video is not treated as disposable: it can stay locally for a while, or be pushed onward to your own cloud drive, self-hosted storage, or any designated backend
 - What remains is not just an execution trace, but a replayable, movable media asset that can be processed again later
 
-### 3. Audio extraction & transcription
+### 3. Audio extraction, Whisper transcription, and subtitle-body writing
 - Extracts wav with `ffmpeg`
 - Uses local ASR (`faster-whisper` / `whisper`) as the default fallback path
+- Turns Whisper / ASR output into a more readable **subtitle body**, not just a raw transcript dump
 - Normalizes transcript text with light cleanup: simplified Chinese conversion, sentence splitting, paragraphing
 - Can switch to segmented transcription for longer audio so very long runs are less fragile
 
@@ -87,13 +88,13 @@ More concretely, it directly helps you:
   - `title`
   - `URL`
   - `download_url`
-- Writes transcript body blocks into the page
+- Writes the Whisper / ASR **subtitle body** into the page as structured blocks
 - Lets the page serve as a **text archive layer** first, before extra analysis is appended
 - When needed, can replace stale body content instead of blindly stacking more text underneath it
 
-### 6. Text archiving, analysis, and outline summary
-- Writes the transcript body into Notion as searchable, copyable, reusable text records
-- Appends a Markdown summary after the body, creating a two-layer page structure: raw material first, analysis second
+### 6. Summary and outline placed below the subtitle body
+- Writes the Whisper / ASR subtitle body into Notion as searchable, copyable, reusable text records
+- Appends a Markdown summary below that subtitle body, creating a two-layer page structure: subtitles first, outline second
 - Useful for:
   - structure outline
   - core thesis
