@@ -21,14 +21,14 @@
 > let it pass through download, transcription, upload, storage, and structure,
 > and let it finally settle into a Notion page.
 
-`bilibili-notion-pipeline` is now explicitly positioned as:
+`bilibili-notion-pipeline` is more accurately described as:
 
-> **a skill-first, agent-enhanced Bilibili → Notion workflow repository.**
+> **a Bilibili → Notion workflow repository built around Skill + scripts first, with optional Agent integration when needed.**
 
 Which means:
 
-- **Skill is the primary identity**: a reusable OpenClaw skill with stable execution scripts
-- **Agent is the enhancement layer**: used when summary writing, judgment, fallback, and progress reporting are needed
+- **The default execution path is Skill + scripts**: download, transcribe, upload, write to Notion, and cleanup can already run as a complete chain on their own
+- **Agent is not a prerequisite**: it only becomes useful when you want more natural summary writing, page-level judgment, exception handling, or progress narration
 
 It is not trying to be a universal AI product.
 It is trying to do one thing well:
@@ -108,17 +108,18 @@ More concretely, it directly helps you:
 - Also keeps metadata for resume, verification, and audit purposes
 - In other words: **the knowledge trace stays in Notion and metadata, while process clutter is minimized inside the OpenClaw workspace**
 
-### 8. Skill / agent progress reporting
+### 8. Progress reporting (skill-native, optionally relayed by an agent)
 - The script emits stage-based progress messages: resolve, download, extract audio, transcribe, upload, write Notion, verify, cleanup
-- The skill / agent layer can relay those stage updates directly to the user instead of going silent during long tasks
+- Those updates can already serve as the skill's own stage reporting
+- If you plug in an agent, it can relay those stage states in a more conversational way — but that is optional, not required
 - This is especially useful when ASR is slow, uploads are large, or Notion writing involves many blocks
 - If the run starts drifting or failing, it becomes easier to pause mid-way and confirm, instead of discovering the problem only at the end
 
 ### 9. Intended usage
 - Can be run manually
 - Can be used directly as an OpenClaw skill
-- Can also serve as the deterministic execution layer inside a larger workflow / agent system
-- If what you want is a stable, traceable, report-friendly, cleanable media-ingestion pipeline, this is more reliable than ad-hoc chat-only operations
+- Can also serve as the deterministic execution layer inside a larger workflow / automation system
+- When needed, an agent can be added on top for summary polish, judgment, or richer user-facing progress updates
 
 ---
 
@@ -572,9 +573,9 @@ Cleanup temporary files
 
 ---
 
-## Why skill-first?
+## Why is this repository written around Skill + scripts by default?
 
-Because most of this workflow is **low-freedom, repeatable, scriptable work**:
+Because most of the workflow is naturally **low-freedom, repeatable, scriptable work**:
 
 - download
 - extract audio
@@ -583,37 +584,55 @@ Because most of this workflow is **low-freedom, repeatable, scriptable work**:
 - write to Notion
 - cleanup
 
-That makes it a much better fit for **Skill + scripts** than for a fully packaged standalone “all-in-one agent product”.
+So it naturally makes sense as **Skill + scripts** first.
 
-### Skill is the core
+That is not about pretending agents do not matter.
+It is simply closer to the real execution model:
+
+- script what can be scripted
+- bring in an agent only where judgment or wording helps
+
+### Skill + scripts is the default path
 - reusable
 - callable
 - composable
-- easy to embed inside other systems
+- can run end-to-end on its own
+- easy to embed inside other workflows
 
-### Agent is the enhancement layer
-Agents are best reserved for the uncertain parts:
+### Agent is optional enhancement
+An agent becomes useful when you want help with parts like:
 - whether to create or update a page
-- whether to replace or append old content
-- how to write a natural summary
-- how to report progress during long tasks
-- when to stop and ask for human confirmation
+- whether to replace or append old body content
+- how to write a more natural summary
+- how to narrate long-running progress to the user
+- whether to pause when transcript quality looks wrong
 
-So the cleanest positioning is:
+So the most natural framing is:
 
-> **skill-first, agent-enhanced.**
+> **run it as Skill + scripts by default, and only layer in an agent when that extra flexibility is useful.**
 
 ---
 
-## Is it still an agent project?
+## So what is its relationship with agents?
 
-Partly — but it does not need to use “agent” as its only identity.
+It can absolutely work with agents,
+but it does **not require an agent in order to make sense.**
 
 A more accurate description is:
 
-> **a vertical workflow repository built around a reusable Skill, with agent capabilities layered on top.**
+> **a Skill + scripts workflow that can run independently, while still being agent-friendly.**
 
-That is a better public framing than pretending it is a universal autonomous agent.
+If all you want is stable execution:
+- Skill + scripts is enough
+
+If you also want:
+- more natural summaries
+- smarter page-level decisions
+- more assistant-like progress narration
+
+then you can add an agent on top.
+
+That is more honest than presenting it as if everything depends on agents from the start.
 
 ---
 
