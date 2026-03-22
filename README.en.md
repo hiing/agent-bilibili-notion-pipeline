@@ -103,6 +103,68 @@ There are a few keys and paths that must be prepared before the pipeline becomes
 | ASR segment threshold | `ASR_AUTO_SEGMENT_MINUTES` | Auto-enable segmented transcription above this duration |
 | ASR segment length | `ASR_SEGMENT_SECONDS` | Segment duration in seconds, default `600` |
 
+### About the current self-hosted upload backend
+
+This repository treats the upload backend as a **replaceable component**, but the instance currently used in practice is:
+
+- `https://stor.pull.eu.org/`
+
+This capability was not built entirely from scratch. It clearly **benefits from** the ideas and implementation foundation provided by:
+
+- `https://github.com/MarSeventh/CloudFlare-ImgBed`
+
+What matters here is not just “an image bed / public file link”, but several practical properties behind it.
+
+#### 1) WebDAV is a real advantage
+For this pipeline, WebDAV matters because it makes the storage layer more useful than a bare upload endpoint:
+
+- it provides a more stable remote landing place for generated files
+- it makes manual organization, migration, and backup much easier
+- it can serve this pipeline and also other automation flows
+
+So in practice, it behaves less like “just an upload API” and more like a **lightweight file layer**.
+
+#### 2) Telegram-group-based “effectively huge” storage is powerful — but risky
+One of the strongest attractions of this kind of setup is the ability to lean on **Telegram groups / channels** as the file-bearing layer, which creates a very cheap and capacity-friendly storage experience.
+
+But this must be stated clearly:
+
+> This is not the same thing as a conventional object storage service with formal SLA guarantees.
+> It is a highly practical engineering shortcut, but it comes with platform risk.
+
+So the README should frame it honestly:
+
+- it can be used as a **very cost-effective storage layer**
+- but it should not be treated as an **absolutely durable, absolutely safe, never-fails foundation**
+- you should assume the possibility of **account bans, rate limits, deleted content, and broken links**
+
+If you depend on it long-term, you should still keep:
+
+- local backups of original files
+- local retention of metadata / transcripts
+- an escape plan for switching upload backends later
+
+#### 3) Chunked upload is one of its most practical strengths
+For video workflows, chunked upload is not cosmetic — it is operationally important:
+
+- large files become more robust to upload
+- unstable networks hurt less
+- long videos and larger mp4 files become much more manageable
+- retries become cheaper after interruption
+
+For this Bilibili → Notion pipeline, the value is simple:
+
+> **chunking makes the upload step less brittle.**
+
+And that matters a lot, because in long workflows the fragile point is often not Notion writing, but:
+
+- large upload failures
+- network interruptions
+- oversized single requests
+- unstable remote processing
+
+Chunked upload helps buffer all of those problems.
+
 ### Runtime dependencies
 
 - Python 3.10+
