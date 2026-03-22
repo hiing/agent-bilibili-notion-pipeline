@@ -150,53 +150,89 @@ cp .env.example .env
 
 ---
 
-### 2）执行 `prepare`
+### 2）一键执行 `run`
+
+最推荐直接用：
 
 ```bash
-python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
-  --url "https://b23.tv/xxxxx"
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "https://b23.tv/xxxxx" \
+  --cleanup-mode temp
 ```
 
-这一步会尽量自动完成：
+如果你已经准备好了总结 Markdown：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "https://b23.tv/xxxxx" \
+  --markdown-file /path/to/summary.md \
+  --require-summary \
+  --cleanup-mode temp
+```
+
+这一步会串起来：
 - 下载视频
 - 抽音频
 - 转写
 - 上传 mp4
 - 创建/更新 Notion 页面
 - 写入“整理字幕”正文
+- 可选追加总结
+- 回读校验
+- 清理中间文件
 
-输出会给你一份 JSON，通常包含：
+输出会给你一份完整 JSON，通常包含：
 
 - `bvid`
 - `title`
 - `video_url`
 - `local_file`
-- `wav_path`
 - `transcript_path`
 - `page_id`
 - `notion_url`
 - `download_url`
 - `metadata_path`
+- `verification`
+- `cleanup`
 
 ---
 
-### 3）补总结（两种方式都可以）
+### 3）分步执行 `prepare`
 
-#### 方式 A：人工 / 模板生成
-读取 `transcript_path` 后，自行写 Markdown 总结。
+如果你想在正文写入后，人工再补总结：
 
-#### 方式 B：交给 agent 生成
-让 agent 读取转写内容，再生成更自然的：
-- `## 结构梳理`
-- `## 核心观点`
-- `## 关键概念`
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
+  --url "https://b23.tv/xxxxx"
+```
 
-可以参考：
-- `skill/bilibili-notion-pipeline/references/summary-template.md`
+如果用户明确给了已有 Notion 页面：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
+  --url "<链接>" \
+  --page-id "<notion_page_id>" \
+  --replace-children
+```
 
 ---
 
-### 4）把总结追加到 Notion
+### 4）查看状态 `state`
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py state \
+  --metadata /path/to/BVxxxx.metadata.json
+```
+
+适合查看：
+- 当前停在哪一步
+- 本地 mp4 / wav / transcript 是否还在
+- 是否已经追加总结
+- 最近一次校验结果是什么
+
+---
+
+### 5）补总结并回写 Notion
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
@@ -208,13 +244,54 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
 
 ---
 
-### 5）清理临时文件
+### 6）回读校验 `verify`
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py verify \
+  --metadata /path/to/BVxxxx.metadata.json \
+  --require-summary
+```
+
+它会检查：
+- 是否存在“整理字幕”标题
+- 是否存在“正文”标题
+- 是否有正文段落
+- 是否存在总结区（开启 `--require-summary` 时）
+
+校验不通过会非 0 退出。
+
+---
+
+### 7）断点续跑 `resume`
+
+如果长任务中断、转写完成但还没写回、或写了一半后要继续：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
+  --metadata /path/to/BVxxxx.metadata.json \
+  --cleanup-mode temp
+```
+
+如果这次恢复时顺便补总结：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
+  --metadata /path/to/BVxxxx.metadata.json \
+  --markdown-file /path/to/summary.md \
+  --require-summary \
+  --cleanup-mode temp
+```
+
+---
+
+### 8）清理临时文件 `cleanup`
 
 只删 wav / txt：
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
-  --metadata /path/to/BVxxxx.metadata.json
+  --metadata /path/to/BVxxxx.metadata.json \
+  --mode temp
 ```
 
 连本地 mp4 一起删：
@@ -222,7 +299,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata /path/to/BVxxxx.metadata.json \
-  --delete-video
+  --mode all
 ```
 
 ---
