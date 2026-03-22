@@ -5,6 +5,13 @@
 [![Bilibili to Notion](https://img.shields.io/badge/pipeline-Bilibili%20%E2%86%92%20Notion-0ea5e9)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![License: MIT](https://img.shields.io/badge/license-MIT-black)](./LICENSE)
 
+[![Bilibili](https://img.shields.io/badge/Bilibili-00A1D6?logo=bilibili&logoColor=white)](https://www.bilibili.com/)
+[![Notion](https://img.shields.io/badge/Notion-000000?logo=notion&logoColor=white)](https://www.notion.so/)
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![Whisper](https://img.shields.io/badge/ASR-Whisper-412991?logo=openai&logoColor=white)](https://github.com/openai/whisper)
+[![Telegram Storage](https://img.shields.io/badge/Telegram-backed%20storage-26A5E4?logo=telegram&logoColor=white)](https://telegram.org/)
+
 [中文 README](./README.md)
 
 > Give it a Bilibili link,
@@ -27,7 +34,7 @@ It is trying to do one thing well:
 
 ---
 
-## What it can do
+## ✨ What it can do
 
 ### 1. Link resolution
 - Accepts both `b23.tv` short links and standard Bilibili URLs
@@ -77,7 +84,7 @@ It is trying to do one thing well:
 
 ---
 
-## What you need before it can run
+## 🗝️ What you need before it can run
 
 There are a few keys and paths that must be prepared before the pipeline becomes real.
 
@@ -231,7 +238,7 @@ So it is best understood as:
 
 ---
 
-## Repository layout
+## 🧱 Repository layout
 
 ```text
 bilibili-notion-pipeline/
@@ -257,7 +264,7 @@ bilibili-notion-pipeline/
 
 ---
 
-## Quick start
+## 🚀 Quick start
 
 ### 1) Copy the environment template
 

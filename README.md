@@ -5,6 +5,13 @@
 [![Bilibili to Notion](https://img.shields.io/badge/pipeline-Bilibili%20%E2%86%92%20Notion-0ea5e9)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![License: MIT](https://img.shields.io/badge/license-MIT-black)](./LICENSE)
 
+[![Bilibili](https://img.shields.io/badge/Bilibili-00A1D6?logo=bilibili&logoColor=white)](https://www.bilibili.com/)
+[![Notion](https://img.shields.io/badge/Notion-000000?logo=notion&logoColor=white)](https://www.notion.so/)
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![Whisper](https://img.shields.io/badge/ASR-Whisper-412991?logo=openai&logoColor=white)](https://github.com/openai/whisper)
+[![Telegram Storage](https://img.shields.io/badge/Telegram-backed%20storage-26A5E4?logo=telegram&logoColor=white)](https://telegram.org/)
+
 [English README](./README.en.md)
 
 > 给一条 B 站链接，
@@ -26,7 +33,7 @@
 
 ---
 
-## 它能实现什么
+## ✨ 它能实现什么
 
 有些功能像工具，有些功能更像习惯；这套仓库把两者都留了下来。
 
@@ -79,7 +86,7 @@
 
 ---
 
-## 出发前，要准备几把钥匙
+## 🗝️ 出发前，要准备几把钥匙
 
 如果你想让这条流水线真正跑起来，需要先准备几样东西。
 
@@ -233,7 +240,7 @@ Notion 页面只保存结构化内容 + 公开下载链接
 
 ---
 
-## 仓库结构
+## 🧱 仓库结构
 
 ```text
 bilibili-notion-pipeline/
@@ -259,7 +266,7 @@ bilibili-notion-pipeline/
 
 ---
 
-## 快速开始
+## 🚀 快速开始
 
 ### 1）复制环境变量模板
 
