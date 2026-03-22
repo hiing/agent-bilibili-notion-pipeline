@@ -4,6 +4,7 @@
 [![Skill First](https://img.shields.io/badge/position-skill--first-10b981)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![Bilibili to Notion](https://img.shields.io/badge/pipeline-Bilibili%20%E2%86%92%20Notion-0ea5e9)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![License: MIT](https://img.shields.io/badge/license-MIT-black)](./LICENSE)
+[![Clawhub](https://img.shields.io/badge/Clawhub-hiing%2Fbilibili--notion--pipeline-6d28d9)](https://clawhub.ai/hiing/bilibili-notion-pipeline)
 
 [![Bilibili](https://img.shields.io/badge/Bilibili-00A1D6?logo=bilibili&logoColor=white)](https://www.bilibili.com/)
 [![Notion](https://img.shields.io/badge/Notion-000000?logo=notion&logoColor=white)](https://www.notion.so/)
@@ -13,6 +14,8 @@
 [![Telegram Storage](https://img.shields.io/badge/Telegram-backed%20storage-26A5E4?logo=telegram&logoColor=white)](https://telegram.org/)
 
 [中文 README](./README.md)
+
+> Also published on Clawhub: <https://clawhub.ai/hiing/bilibili-notion-pipeline>
 
 > Give it a Bilibili link,
 > let it pass through download, transcription, upload, storage, and structure,
