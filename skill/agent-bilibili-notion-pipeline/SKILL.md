@@ -1,13 +1,17 @@
 ---
 name: agent-bilibili-notion-pipeline
-description: Process a Bilibili/b23 link into a Notion transcript page: download the video, transcribe audio, upload the mp4, create or update a Notion page, write transcript blocks, then append an agent-written Markdown summary. Use when the user wants B站内容整理进 Notion、字幕入库、文后总结追加、下载链接回写等流程。
+description: Skill-first Bilibili to Notion pipeline. Download a Bilibili/b23 video, transcribe audio, upload the mp4, create or update a Notion transcript page, write transcript blocks, then optionally append a Markdown summary. Use when the user wants B站内容整理进 Notion、字幕入库、下载链接回写、文后总结追加等流程。
 ---
 
-# Agent Bilibili → Notion Pipeline
+# Skill-First Bilibili → Notion Pipeline
 
-这个 skill 把工作拆成两类：
+这个 skill 现在的定位是：
 
-1. **脚本负责稳定执行**
+> **Skill-first，agent-enhanced。**
+
+也就是说：
+
+1. **Skill 是主体**
    - 下载视频
    - 抽音频
    - 转写文本
@@ -16,7 +20,7 @@ description: Process a Bilibili/b23 link into a Notion transcript page: download
    - 写入正文 blocks
    - 清理临时文件
 
-2. **agent 负责判断与总结**
+2. **Agent 是增强层**
    - 页面是新建还是更新
    - 是否替换旧正文
    - 文后总结怎么写
@@ -31,6 +35,18 @@ description: Process a Bilibili/b23 link into a Notion transcript page: download
 - “下载、转写、上传并写 Notion”
 - “给这篇整理字幕页补结构梳理和核心观点”
 - “把视频内容做成正文 + 文后总结”
+- “把 B 站内容入库到 Notion，并保留下载链接”
+
+## 为什么它首先是 Skill
+
+因为这套流程的大部分工作，都是：
+
+- 可重复
+- 低自由度
+- 易脚本化
+- 需要稳定执行
+
+所以优先应该交给 `scripts/`，而不是每次让 agent 临场重写。
 
 ## 标准流程
 
@@ -63,23 +79,20 @@ python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py prepare \
 
 - 主题是否跑偏
 - 识别质量是否可接受
+- 是否需要人工干预
 - 文后总结应该如何组织
 
-### 3）按固定风格写文后总结
+### 3）补文后总结（两种方式都可以）
 
-默认建议最少包含：
+#### 方式 A：人工 / 模板生成
+直接按固定结构写 Markdown：
 
 - `## 结构梳理`
 - `## 核心观点`
 - `## 关键概念`
 
-风格要求：
-
-- 中文
-- 简洁
-- 好读
-- 不空话
-- 不复述一整遍原文
+#### 方式 B：agent 生成
+让 agent 阅读转写结果后，再生成更自然的总结。
 
 可参考：
 
@@ -137,3 +150,4 @@ python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 - 官方字幕不可靠，默认准备 ASR 兜底
 - 如果转写质量明显跑偏，不要硬写总结，先告知用户
 - 更新已有页面时，只有在用户明确要求替换旧正文时才用 `--replace-children`
+- 对外介绍时，优先把它说成 **Skill 仓库**；agent 能力属于增强层，而不是唯一身份
