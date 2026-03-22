@@ -1,4 +1,4 @@
-# agent-bilibili-notion-pipeline
+# bilibili-notion-pipeline
 
 [![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-7c3aed)](https://github.com/hiing/agent-bilibili-notion-pipeline)
 [![Skill First](https://img.shields.io/badge/position-skill--first-10b981)](https://github.com/hiing/agent-bilibili-notion-pipeline)
@@ -11,7 +11,7 @@
 > 让它穿过下载、转写、上传、入库与整理，
 > 最后安静地落在 Notion 的一页纸上。
 
-`agent-bilibili-notion-pipeline` 现在明确定位为：
+`bilibili-notion-pipeline` 现在明确定位为：
 
 > **一个 skill-first、agent-enhanced 的 B 站 → Notion 流水线技能仓库。**
 
@@ -115,7 +115,7 @@
 ## 仓库结构
 
 ```text
-agent-bilibili-notion-pipeline/
+bilibili-notion-pipeline/
 ├── README.md                  # 中文默认说明
 ├── README.en.md               # 英文独立说明
 ├── LICENSE
@@ -126,7 +126,7 @@ agent-bilibili-notion-pipeline/
 │   ├── downloads/bilibili/    # 本地视频落地目录（运行期）
 │   └── bili_temp/             # wav / txt / metadata（运行期）
 └── skill/
-    └── agent-bilibili-notion-pipeline/
+    └── bilibili-notion-pipeline/
         ├── SKILL.md
         ├── scripts/
         │   ├── pipeline.py
@@ -153,7 +153,7 @@ cp .env.example .env
 ### 2）执行 `prepare`
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py prepare \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
   --url "https://b23.tv/xxxxx"
 ```
 
@@ -192,14 +192,14 @@ python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py prepare \
 - `## 关键概念`
 
 可以参考：
-- `skill/agent-bilibili-notion-pipeline/references/summary-template.md`
+- `skill/bilibili-notion-pipeline/references/summary-template.md`
 
 ---
 
 ### 4）把总结追加到 Notion
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py append-summary \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
   --page-id "NOTION_PAGE_ID" \
   --markdown-file /path/to/summary.md
 ```
@@ -213,14 +213,14 @@ python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py append-summary \
 只删 wav / txt：
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py cleanup \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata /path/to/BVxxxx.metadata.json
 ```
 
 连本地 mp4 一起删：
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py cleanup \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata /path/to/BVxxxx.metadata.json \
   --delete-video
 ```

@@ -1,4 +1,4 @@
-# agent-bilibili-notion-pipeline
+# bilibili-notion-pipeline
 
 [![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-7c3aed)](https://github.com/hiing/agent-bilibili-notion-pipeline)
 [![Skill First](https://img.shields.io/badge/position-skill--first-10b981)](https://github.com/hiing/agent-bilibili-notion-pipeline)
@@ -11,7 +11,7 @@
 > let it pass through download, transcription, upload, storage, and structure,
 > and let it finally settle into a Notion page.
 
-`agent-bilibili-notion-pipeline` is now explicitly positioned as:
+`bilibili-notion-pipeline` is now explicitly positioned as:
 
 > **a skill-first, agent-enhanced Bilibili → Notion workflow repository.**
 
@@ -114,7 +114,7 @@ There are a few keys and paths that must be prepared before the pipeline becomes
 ## Repository layout
 
 ```text
-agent-bilibili-notion-pipeline/
+bilibili-notion-pipeline/
 ├── README.md
 ├── README.en.md
 ├── LICENSE
@@ -125,7 +125,7 @@ agent-bilibili-notion-pipeline/
 │   ├── downloads/bilibili/
 │   └── bili_temp/
 └── skill/
-    └── agent-bilibili-notion-pipeline/
+    └── bilibili-notion-pipeline/
         ├── SKILL.md
         ├── scripts/
         │   ├── pipeline.py
@@ -152,7 +152,7 @@ Then fill in your real values.
 ### 2) Run `prepare`
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py prepare \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
   --url "https://b23.tv/xxxxx"
 ```
 
@@ -191,14 +191,14 @@ Let an agent read the transcript and write a more natural summary covering:
 - `## Key Concepts`
 
 Reference:
-- `skill/agent-bilibili-notion-pipeline/references/summary-template.md`
+- `skill/bilibili-notion-pipeline/references/summary-template.md`
 
 ---
 
 ### 4) Append the summary to Notion
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py append-summary \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
   --page-id "NOTION_PAGE_ID" \
   --markdown-file /path/to/summary.md
 ```
@@ -210,14 +210,14 @@ python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py append-summary \
 Delete wav / transcript only:
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py cleanup \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata /path/to/BVxxxx.metadata.json
 ```
 
 Delete wav / transcript / local video:
 
 ```bash
-python skill/agent-bilibili-notion-pipeline/scripts/pipeline.py cleanup \
+python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata /path/to/BVxxxx.metadata.json \
   --delete-video
 ```
