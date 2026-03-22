@@ -35,6 +35,23 @@ It is trying to do one thing well:
 
 > **move video knowledge from Bilibili into Notion, then shape it into a page that is readable, storable, and extendable.**
 
+## 🎯 What this skill directly does
+
+If reduced to one sentence, this skill turns:
+
+> **Bilibili link → original video retention → transcript generation → storage upload → Notion archiving → outline summary**
+
+into a real executable chain.
+
+More concretely, it directly helps you:
+
+- take a Bilibili link and actually execute parsing, download, audio extraction, transcription, upload, and Notion writing
+- save the original video into your chosen cloud drive, storage backend, or self-hosted upload service instead of leaving it as a temporary OpenClaw artifact only
+- write the body into a durable, editable Notion page
+- append structured summary, outline, core thesis, and key concepts after the body
+- report stage-based progress during long runs instead of staying silent
+- clean up most process junk at the end while preserving the knowledge trace and necessary metadata
+
 ---
 
 ## ✨ What it can do
@@ -108,6 +125,55 @@ It is trying to do one thing well:
 ## 🗝️ What you need before it can run
 
 There are a few keys and paths that must be prepared before the pipeline becomes real.
+
+## 🧰 What you must prepare before this skill can run
+
+This is not a prompt-only skill. It depends on a real execution environment. At minimum, you should prepare the following:
+
+### Runtime environment
+- Python 3.10+
+- `ffmpeg`
+- Required Python dependencies (see `requirements.txt`)
+- Preferably `faster-whisper`; otherwise at least a working `whisper` CLI fallback
+
+### Whisper / ASR conditions
+- This pipeline supports **CPU transcription** by default; GPU is not strictly required
+- But on CPU-only setups, longer videos will become noticeably slower
+- For shorter videos, CPU-only execution may be acceptable; for longer ones, it is better to:
+  - use a faster machine
+  - choose a smaller model
+  - or enable segmented transcription to reduce single-run fragility
+- In other words: **it can run without GPU, but CPU performance directly shapes the user experience**
+
+### Notion requirements
+- You must provide a working `NOTION_API_KEY`
+- You must provide the target `NOTION_DATABASE_ID`
+- The Notion Integration must already be granted write access to the target database / page
+- If Notion permissions are wrong, the earlier stages may succeed but the run will still fail at the final write layer
+
+### Storage / cloud-drive requirements
+- You must provide a working upload endpoint (`UPLOAD_URL`)
+- You must provide the corresponding upload auth (`UPLOAD_TOKEN`)
+- That upload endpoint may be:
+  - your own cloud-drive bridge layer
+  - a self-hosted storage service
+  - a WebDAV / object-storage-backed upload API
+  - or the self-hosted backend used in the README examples
+- Without this layer, the video can still be downloaded and transcribed, but you will not get a stable `download_url`
+
+### Bilibili access conditions
+- `BILI_COOKIES_FILE` is strongly recommended
+- Without it, some videos may run into:
+  - 412
+  - 403
+  - limited download quality
+  - metadata extraction failure
+
+So the best-fit setup for this skill is:
+
+> **a machine that can run ffmpeg + whisper,
+> a writable Notion Integration,
+> and an upload / cloud-storage backend you control.**
 
 ### Required parameters
 
