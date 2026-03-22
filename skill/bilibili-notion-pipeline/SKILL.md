@@ -181,6 +181,34 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 6. 已完成回读校验
 7. 已清理 / 保留了哪些本地文件
 
+## 上传后端约定（简版）
+
+这个 skill 把上传后端视为**可替换组件**，但当前自用实践里常见的是：
+
+- `https://stor.pull.eu.org/`
+
+执行时只需要关心它是否满足下面几件事：
+
+1. 能上传 mp4 并返回公开 `download_url`
+2. 最好支持较大的视频文件
+3. 最好支持分片上传，降低长视频失败率
+4. 如果带 WebDAV 或等价文件管理能力，会更利于整理、迁移和备份
+
+当前这套能力受益于下列项目提供的思路与实现基础：
+
+- `https://github.com/MarSeventh/CloudFlare-ImgBed`
+
+如果后端底层依赖 Telegram 群组 / 频道这类平台型存储，要默认认为它是：
+
+- **高性价比** 的工程方案
+- 但**不是零风险永久存储**
+
+因此执行这条流程时，仍建议：
+
+- 本地保留 metadata / transcript
+- 是否删除本地 mp4，必须按用户明确偏好处理
+- 不要把远端外链当成唯一副本
+
 ## 注意事项
 
 - 不要把真实 token、cookies、profile、日志提交到仓库
