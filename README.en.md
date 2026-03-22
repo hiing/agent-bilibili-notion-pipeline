@@ -698,6 +698,40 @@ You can evolve it in three ways:
 
 ---
 
+## Acknowledgements
+
+This repository ultimately presents itself as a fairly focused Skill + scripts workflow,
+but the path was shaped by several mature technologies and upstream projects along the way.
+They deserve explicit credit here:
+
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**  
+  Provides the multi-site link resolution, metadata extraction, and download backbone that makes this workflow extend beyond Bilibili alone.
+
+- **[FFmpeg](https://ffmpeg.org/)**  
+  Handles audio extraction, media processing, and format conversion — the most reliable foundation for the video → wav → ASR step.
+
+- **[faster-whisper](https://github.com/SYSTRAN/faster-whisper)** / **[whisper](https://github.com/openai/whisper)**  
+  Provide local ASR so the pipeline can still generate subtitle-body material even when official subtitles are unavailable, unstable, or not good enough.
+
+- **[OpenCC](https://github.com/BYVoid/OpenCC)**  
+  Helps with text normalization and Traditional/Simplified Chinese conversion, making transcript output easier to archive and edit.
+
+- **[Notion API](https://developers.notion.com/)**  
+  Supplies the page creation, property writing, block append, and update primitives that let this workflow land as a real Notion page with subtitle body + outline summary.
+
+- **[CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed)**  
+  together with its upload API reference: <https://cfbed.sanyue.de/api/upload.html>  
+  This influenced the storage/upload side: upload backend ideas, chunked upload strategy, remote file landing, and WebDAV-related engineering choices.
+
+- **[OpenClaw](https://github.com/openclaw/openclaw)**  
+  Acts as the runtime host, tool/message orchestration layer, and the environment this skill is meant to live inside. The repo is also compatible with later OpenClaw memory / LCM usage, even though that host-level capability is intentionally not expanded here.
+
+This project is not trying to re-invent those lower layers.
+It is trying to compose them into a reusable path:
+**video link → subtitle body → Notion page → outline below the body.**
+
+---
+
 ## License
 
 MIT

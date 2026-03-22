@@ -702,6 +702,38 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 
 ---
 
+## 致谢
+
+这条流水线虽然最后被整理成了一个相对收束的 Skill + scripts 仓库，
+但中途确实参考、借力或受益于不少成熟技术与项目。这里单独致谢：
+
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**  
+  负责多视频网站的链接解析、元数据提取与下载能力，是这条链路从“B站优先”扩展到“主流视频站点可接”的关键基础。
+
+- **[FFmpeg](https://ffmpeg.org/)**  
+  负责音频抽取、媒体处理与格式转换，是视频 → wav → ASR 这一步最稳的底层工具。
+
+- **[faster-whisper](https://github.com/SYSTRAN/faster-whisper)** / **[whisper](https://github.com/openai/whisper)**  
+  提供本地 ASR 能力，让这条流程在官方字幕不可用、不稳定或质量不足时，依然能产出可整理成字幕正文的文本材料。
+
+- **[OpenCC](https://github.com/BYVoid/OpenCC)**  
+  用于繁简转换与文本归一化，让转写结果更适合后续整理、入库和中文阅读。
+
+- **[Notion API](https://developers.notion.com/)**  
+  提供页面创建、属性写入、block 追加与页面更新能力，让“字幕正文 + 文后大纲”真正落成可保存、可编辑、可复盘的页面。
+
+- **[CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed)**  
+  以及其上传 API 文档：<https://cfbed.sanyue.de/api/upload.html>  
+  这部分给了上传后端、分片上传、远端文件落点、WebDAV 相关思路与工程实现参考；本仓库当前自用上传实例也受益于这条技术路线。
+
+- **[OpenClaw](https://github.com/openclaw/openclaw)**  
+  作为 Skill 运行宿主、消息/工具编排层与后续 memory / LCM 兼容环境，为这套流程提供了实际落地场景；不过 memory 本身属于宿主能力，这个仓库没有展开去讲它。
+
+这份仓库不是在重复发明这些底层能力，
+而是在它们之上，把“视频链接 → 字幕正文 → Notion 页面 → 文后大纲”这条路径收束成一套更容易复用的工作流。
+
+---
+
 ## License
 
 MIT
