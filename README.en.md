@@ -2,11 +2,12 @@
 
 [![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-7c3aed)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![Skill First](https://img.shields.io/badge/position-skill--first-10b981)](https://github.com/hiing/bilibili-notion-pipeline-skill)
-[![Bilibili to Notion](https://img.shields.io/badge/pipeline-Bilibili%20%E2%86%92%20Notion-0ea5e9)](https://github.com/hiing/bilibili-notion-pipeline-skill)
+[![Video to Notion](https://img.shields.io/badge/pipeline-Video%20%E2%86%92%20Notion-0ea5e9)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![License: MIT](https://img.shields.io/badge/license-MIT-black)](./LICENSE)
 [![Clawhub](https://img.shields.io/badge/Clawhub-hiing%2Fbilibili--notion--pipeline-6d28d9)](https://clawhub.ai/hiing/bilibili-notion-pipeline)
 
 [![Bilibili](https://img.shields.io/badge/Bilibili-00A1D6?logo=bilibili&logoColor=white)](https://www.bilibili.com/)
+[![YouTube](https://img.shields.io/badge/YouTube-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/)
 [![Notion](https://img.shields.io/badge/Notion-000000?logo=notion&logoColor=white)](https://www.notion.so/)
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
@@ -17,13 +18,13 @@
 
 > Also published on Clawhub: <https://clawhub.ai/hiing/bilibili-notion-pipeline>
 
-> Give it a Bilibili link,
+> Give it a video link,
 > let it pass through download, transcription, upload, storage, and structure,
 > and let it finally settle into a Notion page.
 
 `bilibili-notion-pipeline` is more accurately described as:
 
-> **a Bilibili → Notion workflow repository built around Skill + scripts first, with optional Agent integration when needed.**
+> **a Video → Notion workflow repository built around Skill + scripts first, with optional Agent integration when needed (Bilibili-first in maturity).**
 
 Which means:
 
@@ -33,19 +34,19 @@ Which means:
 It is not trying to be a universal AI product.
 It is trying to do one thing well:
 
-> **move video knowledge from Bilibili into Notion, then shape it into a page that is readable, storable, and extendable.**
+> **move video knowledge into Notion — Bilibili first, but extensible to YouTube and other yt-dlp-supported sites — then shape it into a page that is readable, storable, and extendable.**
 
 ## 🎯 What this skill directly does
 
 If reduced to one sentence, this skill turns:
 
-> **Bilibili link → original video retention → transcript generation → storage upload → Notion archiving → outline summary**
+> **video link (Bilibili first, also extendable to YouTube and other mainstream video sites) → original video retention → transcript generation → storage upload → Notion archiving → outline summary**
 
 into a real executable chain.
 
 More concretely, it directly helps you:
 
-- take a Bilibili link and actually execute parsing, download, audio extraction, transcription, upload, and Notion writing
+- take a video link and actually execute parsing, download, audio extraction, transcription, upload, and Notion writing; Bilibili is the most mature path today, while YouTube and other yt-dlp-supported sites are also within scope
 - save the original video into your chosen cloud drive, storage backend, or self-hosted upload service instead of leaving it as a temporary OpenClaw artifact only
 - write the body into a durable, editable Notion page
 - append structured summary, outline, core thesis, and key concepts after the body
@@ -57,8 +58,8 @@ More concretely, it directly helps you:
 ## ✨ What it can do
 
 ### 1. Link resolution
-- Accepts both `b23.tv` short links and standard Bilibili URLs
-- Extracts title, BVID, and canonical video URL
+- Accepts `b23.tv` short links, standard Bilibili URLs, and can also take YouTube / other yt-dlp-supported video URLs
+- Extracts title, platform content ID (which is often the BV id in Bilibili flows), and canonical video URL
 - Produces normalized metadata for downstream steps
 
 ### 2. Original video retention and portable archiving
@@ -127,6 +128,8 @@ More concretely, it directly helps you:
 
 There are a few keys and paths that must be prepared before the pipeline becomes real.
 
+As for OpenClaw memory / LCM usage later on, that belongs to the host environment itself; this project is compatible with it, but does not try to explain it in detail here.
+
 ## 🧰 What you must prepare before this skill can run
 
 This is not a prompt-only skill. It depends on a real execution environment. At minimum, you should prepare the following:
@@ -162,8 +165,8 @@ This is not a prompt-only skill. It depends on a real execution environment. At 
   - or the self-hosted backend used in the README examples
 - Without this layer, the video can still be downloaded and transcribed, but you will not get a stable `download_url`
 
-### Bilibili access conditions
-- `BILI_COOKIES_FILE` is strongly recommended
+### Video-platform access conditions (especially important for Bilibili)
+- `VIDEO_COOKIES_FILE` is strongly recommended (the old `BILI_COOKIES_FILE` alias is still accepted)
 - Without it, some videos may run into:
   - 412
   - 403
@@ -189,7 +192,7 @@ So the best-fit setup for this skill is:
 
 | Name | Environment Variable | Purpose |
 |---|---|---|
-| Bilibili cookies file | `BILI_COOKIES_FILE` | Reduces 412 / 403 / access issues |
+| Video-site cookies file | `VIDEO_COOKIES_FILE` | Reduces 412 / 403 / access issues; especially important for Bilibili, with backward-compatible support for `BILI_COOKIES_FILE` |
 | Download directory | `BILI_DOWNLOAD_DIR` | Where local mp4 files are stored |
 | Temp directory | `BILI_TEMP_DIR` | Where wav/txt/metadata artifacts live |
 | Whisper model | `WHISPER_MODEL` | e.g. `small`, `medium` |
@@ -277,7 +280,7 @@ That means:
 - retries become cheaper after interruption
 - upload logic can be resumed explicitly instead of always falling back to full re-upload
 
-For this Bilibili → Notion pipeline, the value is simple:
+For this video → Notion pipeline, the value is simple (with Bilibili currently the most mature path):
 
 > **chunking makes the upload step less brittle.**
 
@@ -293,9 +296,9 @@ Chunked upload helps buffer all of those problems.
 ### Storage architecture / data flow
 
 ```text
-Bilibili Link
+Video link
    ↓
-Resolve metadata (title / bvid / canonical url)
+Resolve metadata (title / content_id / canonical url)
    ↓
 Download mp4 to local
    ↓
@@ -427,7 +430,8 @@ This executes the full common workflow:
 
 The JSON output usually contains:
 
-- `bvid`
+- `content_id` (generic content ID; in Bilibili flows this is usually the BV id)
+- `bvid` (compatibility field; may be absent outside Bilibili)
 - `title`
 - `video_url`
 - `local_file`
@@ -450,6 +454,9 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
   --url "https://b23.tv/xxxxx"
 ```
 
+> Note: most command examples still use Bilibili links because that is the most mature path today;
+> however, the underlying downloader is `yt-dlp`, so YouTube and other supported video sites are also reasonable targets.
+
 If you already know the target Notion page:
 
 ```bash
@@ -465,7 +472,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py state \
-  --metadata /path/to/BVxxxx.metadata.json
+  --metadata /path/to/<content-id>.metadata.json
 ```
 
 Useful for checking:
@@ -491,7 +498,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py verify \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --require-summary
 ```
 
@@ -511,7 +518,7 @@ If a long run was interrupted, or the transcript body exists but the later steps
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --cleanup-mode temp
 ```
 
@@ -519,7 +526,7 @@ If you want to resume and append a summary in the same step:
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --markdown-file /path/to/summary.md \
   --require-summary \
   --cleanup-mode temp
@@ -533,7 +540,7 @@ Delete wav / transcript only:
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --mode temp
 ```
 
@@ -541,7 +548,7 @@ Delete wav / transcript / local video:
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --mode all
 ```
 
@@ -550,7 +557,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 ## Typical flow
 
 ```text
-Bilibili link
+Video link
   ↓
 Resolve metadata
   ↓
@@ -638,11 +645,12 @@ That is more honest than presenting it as if everything depends on agents from t
 
 ## Known limitations
 
-- Bilibili may return `412 / 403`
+- Bilibili is currently the most mature target path here, but it may still return `412 / 403`
+- Other mainstream video sites can work through `yt-dlp`, but real-world success still depends on target-site accessibility and compatibility
 - Official subtitles are unreliable, so local ASR is often required
 - Long videos can be slow to transcribe
 - Notion writing is stable, but summary quality depends on transcript quality
-- This repo only covers the **Bilibili → Notion** path, not unrelated platform login / anti-bot systems
+- This repo focuses on the **video → Notion** path; it does not try to cover unrelated platform login / anti-bot systems
 
 ---
 
@@ -653,7 +661,7 @@ This repository is organized for **public release**, so the following should nev
 - `.env`
 - Notion tokens
 - upload tokens
-- Bilibili cookies
+- video-site cookies
 - browser profiles
 - downloaded videos
 - wav / txt / logs / temporary metadata

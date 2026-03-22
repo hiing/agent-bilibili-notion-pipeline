@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import requests
 from yt_dlp import YoutubeDL
@@ -29,7 +30,7 @@ NOTION_API_KEY = os.getenv("NOTION_API_KEY", "")
 NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID", "")
 UPLOAD_URL = os.getenv("UPLOAD_URL", "")
 UPLOAD_TOKEN = os.getenv("UPLOAD_TOKEN", "")
-BILI_COOKIES_FILE = os.getenv("BILI_COOKIES_FILE", "")
+VIDEO_COOKIES_FILE = os.getenv("VIDEO_COOKIES_FILE", os.getenv("BILI_COOKIES_FILE", ""))
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "zh")
 WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "auto")
@@ -61,11 +62,40 @@ def run(cmd: List[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def extract_bvid(value: str) -> str:
+def extract_bvid(value: str, info: Optional[Dict[str, Any]] = None) -> str:
     m = re.search(r"(BV[0-9A-Za-z]+)", value)
-    if not m:
-        raise ValueError(f"Cannot extract BVID from: {value}")
-    return m.group(1)
+    if m:
+        return m.group(1)
+    if info:
+        for key in ("id", "display_id"):
+            raw = info.get(key)
+            if raw:
+                return slug_title(str(raw), 80)
+    m = re.search(r"(?:v=|/)([A-Za-z0-9_-]{6,})", value)
+    if m:
+        return slug_title(m.group(1), 80)
+    return slug_title(value, 80)
+
+
+def detect_platform(url: str, info: Optional[Dict[str, Any]] = None) -> str:
+    extractor = str((info or {}).get("extractor_key") or "").lower()
+    if "bili" in extractor:
+        return "bilibili"
+    if "youtube" in extractor:
+        return "youtube"
+
+    host = urlparse(url).netloc.lower()
+    if "bilibili.com" in host or host.endswith("b23.tv"):
+        return "bilibili"
+    if "youtube.com" in host or host.endswith("youtu.be"):
+        return "youtube"
+    if "vimeo.com" in host:
+        return "vimeo"
+    if "twitch.tv" in host:
+        return "twitch"
+    if "douyin.com" in host or "iesdouyin.com" in host:
+        return "douyin"
+    return "generic"
 
 
 def flatten_info(info: Dict[str, Any]) -> Dict[str, Any]:
@@ -76,27 +106,30 @@ def flatten_info(info: Dict[str, Any]) -> Dict[str, Any]:
     return info
 
 
-def ydl_common_opts() -> Dict[str, Any]:
+def ydl_common_opts(url: Optional[str] = None) -> Dict[str, Any]:
+    headers: Dict[str, str] = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+    }
+    if url and detect_platform(url) == "bilibili":
+        headers["Referer"] = "https://www.bilibili.com/"
+
     opts: Dict[str, Any] = {
         "merge_output_format": "mp4",
-        "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            "Referer": "https://www.bilibili.com/",
-        },
+        "http_headers": headers,
         "quiet": False,
         "noplaylist": True,
     }
-    if BILI_COOKIES_FILE:
-        opts["cookiefile"] = BILI_COOKIES_FILE
+    if VIDEO_COOKIES_FILE:
+        opts["cookiefile"] = VIDEO_COOKIES_FILE
     return opts
 
 
 def fetch_video_info(url: str) -> Dict[str, Any]:
-    with YoutubeDL(ydl_common_opts()) as ydl:
+    with YoutubeDL(ydl_common_opts(url)) as ydl:
         info = flatten_info(ydl.extract_info(url, download=False))
     return info
 
@@ -104,7 +137,7 @@ def fetch_video_info(url: str) -> Dict[str, Any]:
 def download_video(url: str, title: str, bvid: str) -> Path:
     ensure_dir(DOWNLOAD_DIR)
     out_base = DOWNLOAD_DIR / f"{slug_title(title)} - {bvid}.%(ext)s"
-    opts = ydl_common_opts()
+    opts = ydl_common_opts(url)
     opts["outtmpl"] = str(out_base)
     with YoutubeDL(opts) as ydl:
         ydl.download([url])
@@ -473,7 +506,9 @@ def state_report(meta: Dict[str, Any]) -> Dict[str, Any]:
     verification = meta.get("verification")
     cleanup = meta.get("cleanup")
 
-    if not meta.get("bvid"):
+    content_id = meta.get("content_id") or meta.get("bvid")
+
+    if not content_id:
         next_action = "resolve_info"
     elif not local_file_exists:
         next_action = "download_video"
@@ -500,6 +535,8 @@ def state_report(meta: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "state": meta.get("state"),
+        "platform": meta.get("platform"),
+        "content_id": content_id,
         "bvid": meta.get("bvid"),
         "title": meta.get("title"),
         "page_id": meta.get("page_id"),
@@ -569,21 +606,24 @@ def prepare_pipeline(
     if page_id:
         meta["requested_page_id"] = page_id
 
-    if not meta.get("bvid") or not meta.get("title") or not meta.get("video_url"):
+    if not (meta.get("content_id") or meta.get("bvid")) or not meta.get("title") or not meta.get("video_url"):
         progress("解析视频信息")
         info = fetch_video_info(url)
         title = info.get("title") or url
         video_url = info.get("webpage_url") or url
-        bvid = extract_bvid(video_url if "BV" in video_url else url)
+        bvid = extract_bvid(video_url if "BV" in video_url else url, info)
+        platform = detect_platform(video_url or url, info)
         meta.update({
             "state": "info_resolved",
-            "bvid": bvid,
+            "platform": platform,
+            "content_id": bvid,
+            "bvid": bvid if str(bvid).startswith("BV") else meta.get("bvid"),
             "title": title,
             "video_url": video_url,
         })
         meta_path = save_metadata(meta, bvid, meta_path)
     else:
-        bvid = meta["bvid"]
+        bvid = meta.get("content_id") or meta["bvid"]
         title = meta["title"]
         video_url = meta["video_url"]
         meta_path = meta_path or Path(meta["metadata_path"]) if meta.get("metadata_path") else metadata_path_for_bvid(bvid)
@@ -663,7 +703,7 @@ def maybe_append_summary(meta: Dict[str, Any], markdown: Optional[str]) -> Dict[
     meta["summary"] = result
     meta["summary_appended_blocks"] = result["appended_blocks"]
     meta["state"] = "summary_appended"
-    save_metadata(meta, meta["bvid"], Path(meta["metadata_path"]))
+    save_metadata(meta, meta.get("content_id") or meta.get("bvid", "metadata"), Path(meta["metadata_path"]))
     return meta
 
 
@@ -712,7 +752,7 @@ def cmd_cleanup(args: argparse.Namespace) -> None:
     result = cleanup_from_meta(meta, mode)
     meta["cleanup"] = result
     meta["state"] = "cleaned" if mode != "none" else meta.get("state", "prepared")
-    save_metadata(meta, meta.get("bvid", "metadata"), Path(meta["metadata_path"]))
+    save_metadata(meta, meta.get("content_id") or meta.get("bvid", "metadata"), Path(meta["metadata_path"]))
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -764,11 +804,11 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Bilibili -> Notion pipeline")
+    parser = argparse.ArgumentParser(description="Video -> Notion pipeline (Bilibili-first, yt-dlp-backed)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("prepare", help="download, transcribe, upload, create/update Notion page")
-    p.add_argument("--url", required=True, help="Bilibili or b23 URL")
+    p.add_argument("--url", required=True, help="Video URL (Bilibili/b23 primary; also usable with YouTube and other yt-dlp-supported sites)")
     p.add_argument("--page-id", help="Existing Notion page id")
     p.add_argument("--replace-children", action="store_true", help="Archive existing top-level children before writing transcript")
     p.set_defaults(func=cmd_prepare)
@@ -809,7 +849,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_resume)
 
     p = sub.add_parser("run", help="one-shot pipeline: prepare -> optional summary -> verify -> cleanup")
-    p.add_argument("--url", required=True, help="Bilibili or b23 URL")
+    p.add_argument("--url", required=True, help="Video URL (Bilibili/b23 primary; also usable with YouTube and other yt-dlp-supported sites)")
     p.add_argument("--page-id", help="Existing Notion page id")
     p.add_argument("--replace-children", action="store_true", help="Archive existing top-level children before writing transcript")
     group = p.add_mutually_exclusive_group(required=False)

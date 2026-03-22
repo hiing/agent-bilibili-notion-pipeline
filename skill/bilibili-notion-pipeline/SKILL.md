@@ -1,17 +1,17 @@
 ---
 name: bilibili-notion-pipeline
-description: Skill-first Bilibili to Notion pipeline. Download a Bilibili/b23 video, transcribe audio, upload the mp4, create or update a Notion transcript page, write transcript blocks, then optionally append a Markdown summary. Use when the user wants B站内容整理进 Notion、字幕入库、下载链接回写、文后总结追加等流程。
+description: Skill-first video-to-Notion pipeline, Bilibili-first in maturity. Download a Bilibili/b23 video — and, when needed, YouTube or other yt-dlp-supported video links — transcribe audio, upload the mp4, create or update a Notion transcript page, write transcript blocks, then optionally append a Markdown summary. Use when the user wants 视频内容整理进 Notion、字幕入库、下载链接回写、文后总结追加等流程。
 ---
 
-# Skill-First Bilibili → Notion Pipeline
+# Skill-First Video → Notion Pipeline (Bilibili-first)
 
 这个 skill 现在的定位是：
 
-> **Skill-first，agent-enhanced。**
+> **默认按 Skill + scripts 跑通，必要时再接入 agent。**
 
 也就是说：
 
-1. **Skill 是主体**
+1. **Skill + scripts 是默认主路径**
    - 下载视频
    - 抽音频
    - 转写文本
@@ -20,7 +20,7 @@ description: Skill-first Bilibili to Notion pipeline. Download a Bilibili/b23 vi
    - 写入正文 blocks
    - 清理临时文件
 
-2. **Agent 是增强层**
+2. **Agent 是按需增强层**
    - 页面是新建还是更新
    - 是否替换旧正文
    - 文后总结怎么写
@@ -32,10 +32,11 @@ description: Skill-first Bilibili to Notion pipeline. Download a Bilibili/b23 vi
 当用户提出类似请求时触发：
 
 - “把这个 B 站视频整理进 Notion”
+- “把这个 YouTube 视频整理进 Notion”
 - “下载、转写、上传并写 Notion”
 - “给这篇整理字幕页补结构梳理和核心观点”
 - “把视频内容做成正文 + 文后总结”
-- “把 B 站内容入库到 Notion，并保留下载链接”
+- “把视频内容入库到 Notion，并保留下载链接”
 
 ## 为什么它首先是 Skill
 
@@ -54,7 +55,7 @@ description: Skill-first Bilibili to Notion pipeline. Download a Bilibili/b23 vi
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
-  --url "<b23或BV链接>" \
+  --url "<视频链接：b23/B站/YouTube/其他支持站点>" \
   --cleanup-mode temp
 ```
 
@@ -62,7 +63,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
-  --url "<b23或BV链接>" \
+  --url "<视频链接：b23/B站/YouTube/其他支持站点>" \
   --markdown-file /path/to/summary.md \
   --require-summary \
   --cleanup-mode temp
@@ -86,7 +87,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
 #### 1）执行 `prepare`
 
 ```bash
-python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare --url "<b23或BV链接>"
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare --url "<视频链接：b23/B站/YouTube/其他支持站点>"
 ```
 
 如果用户明确给了已有 Notion 页面：
@@ -105,6 +106,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
 - `transcript_path`
 - `metadata_path`
 - `download_url`
+- `content_id`（B站场景下通常就是 BV 号）
 
 #### 2）阅读转写正文
 
@@ -213,6 +215,8 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 
 - 不要把真实 token、cookies、profile、日志提交到仓库
 - 官方字幕不可靠，默认准备 ASR 兜底
+- 当前最成熟的链路仍是 B站；YouTube / 其他站点依赖 `yt-dlp` 兼容性与目标站可访问性
 - 如果转写质量明显跑偏，不要硬写总结，先告知用户
 - 更新已有页面时，只有在用户明确要求替换旧正文时才用 `--replace-children`
+- 关于 OpenClaw 后续 memory / LCM 的使用，属于宿主环境能力；本项目不在这里展开介绍
 - 对外介绍时，优先把它说成 **Skill 仓库**；agent 能力属于增强层，而不是唯一身份

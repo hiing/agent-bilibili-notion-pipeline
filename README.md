@@ -2,11 +2,12 @@
 
 [![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-7c3aed)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![Skill First](https://img.shields.io/badge/position-skill--first-10b981)](https://github.com/hiing/bilibili-notion-pipeline-skill)
-[![Bilibili to Notion](https://img.shields.io/badge/pipeline-Bilibili%20%E2%86%92%20Notion-0ea5e9)](https://github.com/hiing/bilibili-notion-pipeline-skill)
+[![Video to Notion](https://img.shields.io/badge/pipeline-Video%20%E2%86%92%20Notion-0ea5e9)](https://github.com/hiing/bilibili-notion-pipeline-skill)
 [![License: MIT](https://img.shields.io/badge/license-MIT-black)](./LICENSE)
 [![Clawhub](https://img.shields.io/badge/Clawhub-hiing%2Fbilibili--notion--pipeline-6d28d9)](https://clawhub.ai/hiing/bilibili-notion-pipeline)
 
 [![Bilibili](https://img.shields.io/badge/Bilibili-00A1D6?logo=bilibili&logoColor=white)](https://www.bilibili.com/)
+[![YouTube](https://img.shields.io/badge/YouTube-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/)
 [![Notion](https://img.shields.io/badge/Notion-000000?logo=notion&logoColor=white)](https://www.notion.so/)
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
@@ -17,13 +18,13 @@
 
 > 已发布到 Clawhub：<https://clawhub.ai/hiing/bilibili-notion-pipeline>
 
-> 给一条 B 站链接，
+> 给一条视频链接，
 > 让它穿过下载、转写、上传、入库与整理，
 > 最后安静地落在 Notion 的一页纸上。
 
 `bilibili-notion-pipeline` 更准确的定位是：
 
-> **一个以 Skill + scripts 为主、可按需接入 Agent 的 B 站 → Notion 流水线仓库。**
+> **一个以 Skill + scripts 为主、可按需接入 Agent 的 Video → Notion 流水线仓库（B站优先）。**
 
 也就是说：
 
@@ -32,19 +33,19 @@
 
 它不追求“什么都能干”，只想把一件事做好：
 
-> **把视频内容从 Bilibili 搬进 Notion，并整理成可读、可存、可续写的知识页。**
+> **把视频内容从 B站优先、并可扩展到 YouTube / 其他 yt-dlp 支持站点，搬进 Notion，并整理成可读、可存、可续写的知识页。**
 
 ## 🎯 这个 Skill 会直接帮你做什么
 
 如果只用一句话概括，这个 Skill 负责把：
 
-> **B站链接 → 原视频落地 → 字幕转写 → 存储上传 → Notion 入库 → 大纲总结**
+> **视频链接（B站优先，也可扩展到 YouTube / 其他主流视频网站）→ 原视频落地 → 字幕转写 → 存储上传 → Notion 入库 → 大纲总结**
 
 串成一条真正能跑的链路。
 
 更具体地说，它会直接帮助你：
 
-- 接一条 B 站链接，自动完成解析、下载、抽音频、转写、上传、写入 Notion
+- 接一条视频链接，自动完成解析、下载、抽音频、转写、上传、写入 Notion；默认对 B站链路更成熟，也可扩展到 YouTube / 其他 yt-dlp 支持站点
 - 把原视频保存到你指定的网盘、存储后端或自建上传服务，而不是只在 OpenClaw 里临时落一下
 - 把正文稳定写成可长期保存、可再次编辑的 Notion 页面
 - 在正文后继续追加结构化总结、大纲、核心观点和关键概念
@@ -58,8 +59,8 @@
 有些功能像工具，有些功能更像习惯；这套仓库把两者都留了下来。
 
 ### 1. 入口解析
-- 接收 `b23.tv` 短链或标准 Bilibili 链接
-- 解析视频标题、BV 号、原始视频 URL
+- 接收 `b23.tv` 短链、标准 Bilibili 链接，也可接 YouTube / 其他 yt-dlp 支持的视频 URL
+- 解析视频标题、平台内容 ID（B站场景下通常就是 BV 号）、原始视频 URL
 - 为后续写入建立统一元数据
 
 ### 2. 原视频落地与可迁移归档
@@ -128,6 +129,8 @@
 
 如果你想让这条流水线真正跑起来，需要先准备几样东西。
 
+关于 OpenClaw 后续的 memory / LCM 使用，这属于宿主环境能力；本项目默认与之兼容，但 README 不在这里展开介绍。
+
 ## 🧰 这个 Skill 开跑前你必须准备什么
 
 这个 Skill 不是纯提示词，它依赖一套真实运行环境。最少要准备下面几类条件：
@@ -163,8 +166,8 @@
   - 或当前 README 里示例的自托管后端
 - 如果没有这层，视频仍然可以先下载和转写，但拿不到稳定的 `download_url`
 
-### Bilibili 访问条件
-- 强烈建议准备 `BILI_COOKIES_FILE`
+### 视频网站访问条件（对 B站尤其重要）
+- 强烈建议准备 `VIDEO_COOKIES_FILE`（兼容旧变量 `BILI_COOKIES_FILE`）
 - 否则在部分视频上可能遇到：
   - 412
   - 403
@@ -190,7 +193,7 @@
 
 | 名称 | 环境变量 | 说明 |
 |---|---|---|
-| B站 cookies 文件 | `BILI_COOKIES_FILE` | 降低 412 / 403 / 限制概率 |
+| 视频站 cookies 文件 | `VIDEO_COOKIES_FILE` | 降低 412 / 403 / 限制概率；对 B站尤其关键，兼容旧变量 `BILI_COOKIES_FILE` |
 | 下载目录 | `BILI_DOWNLOAD_DIR` | 本地 mp4 保存路径 |
 | 临时目录 | `BILI_TEMP_DIR` | wav、txt、metadata 等中间产物路径 |
 | Whisper 模型 | `WHISPER_MODEL` | 如 `small` / `medium` |
@@ -278,7 +281,7 @@
 - 中断后重试成本更低
 - 上传逻辑可以显式恢复，而不是只能“整包重传”
 
-对我这条 B站 → Notion 流水线来说，分块上传最大的意义就是：
+对我这条 视频 → Notion 流水线来说，分块上传最大的意义就是：
 
 > **它让“视频上传”这一步，没那么脆。**
 
@@ -294,9 +297,9 @@
 ### 存储架构 / 数据流
 
 ```text
-Bilibili Link
+视频链接
    ↓
-Resolve metadata (title / bvid / canonical url)
+解析元数据（title / content_id / canonical url）
    ↓
 Download mp4 to local
    ↓
@@ -428,7 +431,8 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
 
 输出会给你一份完整 JSON，通常包含：
 
-- `bvid`
+- `content_id`（通用内容 ID，B站场景下通常就是 BV 号）
+- `bvid`（兼容字段；非 B站站点未必存在）
 - `title`
 - `video_url`
 - `local_file`
@@ -451,6 +455,9 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
   --url "https://b23.tv/xxxxx"
 ```
 
+> 说明：示例命令多数仍以 B站链接演示，因为这是当前最成熟的主路径；
+> 但脚本底层基于 `yt-dlp`，也可以接 YouTube / 其他受支持视频站点的 URL。
+
 如果用户明确给了已有 Notion 页面：
 
 ```bash
@@ -466,7 +473,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py state \
-  --metadata /path/to/BVxxxx.metadata.json
+  --metadata /path/to/<content-id>.metadata.json
 ```
 
 适合查看：
@@ -493,7 +500,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py verify \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --require-summary
 ```
 
@@ -513,7 +520,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py verify \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --cleanup-mode temp
 ```
 
@@ -521,7 +528,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --markdown-file /path/to/summary.md \
   --require-summary \
   --cleanup-mode temp
@@ -535,7 +542,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --mode temp
 ```
 
@@ -543,7 +550,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 
 ```bash
 python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
-  --metadata /path/to/BVxxxx.metadata.json \
+  --metadata /path/to/<content-id>.metadata.json \
   --mode all
 ```
 
@@ -554,7 +561,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 可以把它理解成一条顺流而下的线：
 
 ```text
-B站链接
+视频链接
   ↓
 解析元数据
   ↓
@@ -641,11 +648,12 @@ B站链接
 
 ## 已知限制
 
-- B站可能返回 `412 / 403`
+- B站在当前链路里仍是最成熟的目标站，但也可能返回 `412 / 403`
+- 其他主流视频网站虽然可以走 `yt-dlp`，但实际成功率仍取决于目标站可访问性与兼容性
 - 官方字幕并不可靠，常常要走本地 ASR
 - 长视频转写很慢
 - Notion 写入稳定，但总结质量取决于正文质量
-- 这套仓库只覆盖 **B站 → Notion** 这条链，不覆盖其他平台登录/风控系统
+- 这套仓库只覆盖 **视频 → Notion** 这条链，不覆盖其他平台登录/风控系统
 
 ---
 
@@ -657,7 +665,7 @@ B站链接
 - `.env`
 - Notion token
 - 上传 token
-- B站 cookies
+- 视频站 cookies
 - 浏览器 profile
 - 本地下载视频
 - wav / txt / logs / 临时 metadata
