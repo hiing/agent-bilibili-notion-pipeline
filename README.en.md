@@ -700,35 +700,38 @@ You can evolve it in three ways:
 
 ## Acknowledgements
 
-This repository ultimately presents itself as a fairly focused Skill + scripts workflow,
-but the path was shaped by several mature technologies and upstream projects along the way.
-They deserve explicit credit here:
+This workflow did not appear out of nowhere.
+It is much more honest to say that it stands on the shoulders of several mature tools and projects,
+and tries to gather a scattered path into a more reusable one:
+**video link → subtitle body → Notion page → outline below the body.**
+
+So this section is here to thank those pieces properly:
 
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**  
-  Provides the multi-site link resolution, metadata extraction, and download backbone that makes this workflow extend beyond Bilibili alone.
+  This is what makes “give it a video link and let it run” actually possible. Multi-site resolution, metadata extraction, and downloading all start here.
 
 - **[FFmpeg](https://ffmpeg.org/)**  
-  Handles audio extraction, media processing, and format conversion — the most reliable foundation for the video → wav → ASR step.
+  Quiet, dependable, and everywhere in media workflows. The video → audio → wav step keeps coming back to FFmpeg for good reason.
 
 - **[faster-whisper](https://github.com/SYSTRAN/faster-whisper)** / **[whisper](https://github.com/openai/whisper)**  
-  Provide local ASR so the pipeline can still generate subtitle-body material even when official subtitles are unavailable, unstable, or not good enough.
+  When official subtitles are missing or not trustworthy, local ASR becomes the real fallback. Much of the “subtitle body” idea in this repo exists because these tools make raw speech recoverable as workable text.
 
 - **[OpenCC](https://github.com/BYVoid/OpenCC)**  
-  Helps with text normalization and Traditional/Simplified Chinese conversion, making transcript output easier to archive and edit.
+  It is not flashy, but it matters. Text normalization and Traditional/Simplified Chinese conversion often determine whether a transcript feels usable or just technically present.
 
 - **[Notion API](https://developers.notion.com/)**  
-  Supplies the page creation, property writing, block append, and update primitives that let this workflow land as a real Notion page with subtitle body + outline summary.
+  Without it, this would stop at “we got a transcript.” With it, subtitle body, page properties, and the postscript outline can actually land as a real knowledge page.
 
 - **[CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed)**  
   together with its upload API reference: <https://cfbed.sanyue.de/api/upload.html>  
-  This influenced the storage/upload side: upload backend ideas, chunked upload strategy, remote file landing, and WebDAV-related engineering choices.
+  The upload/backend side of this repo — chunked uploads, remote file landing, WebDAV-flavored storage thinking — was shaped in part by this technical path.
 
 - **[OpenClaw](https://github.com/openclaw/openclaw)**  
-  Acts as the runtime host, tool/message orchestration layer, and the environment this skill is meant to live inside. The repo is also compatible with later OpenClaw memory / LCM usage, even though that host-level capability is intentionally not expanded here.
+  This repo also has a home because OpenClaw gives it one: skill execution, tool orchestration, user-facing progress reporting, and later compatibility with memory / LCM. The repo deliberately does not expand on host-level memory details here, but it is clearly built with that ecosystem in mind.
 
-This project is not trying to re-invent those lower layers.
-It is trying to compose them into a reusable path:
-**video link → subtitle body → Notion page → outline below the body.**
+This repository is not pretending to have invented those lower layers.
+What it tries to do is simpler and, hopefully, more useful:
+compose already-strong building blocks into a path that feels easier to run, reuse, and extend.
 
 ---
 
