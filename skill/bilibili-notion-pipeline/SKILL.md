@@ -219,4 +219,3 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 - 如果转写质量明显跑偏，不要硬写总结，先告知用户
 - 更新已有页面时，只有在用户明确要求替换旧正文时才用 `--replace-children`
 - 关于 OpenClaw 后续 memory / LCM 的使用，属于宿主环境能力；本项目不在这里展开介绍
-- 对外介绍时，优先把它说成 **Skill 仓库**；agent 能力属于增强层，而不是唯一身份
