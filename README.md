@@ -409,6 +409,14 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
   --cleanup-mode temp
 ```
 
+如果你想先看计划、先做 Notion 预检、不立刻写：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "https://b23.tv/xxxxx" \
+  --dry-run
+```
+
 如果你已经准备好了总结 Markdown：
 
 ```bash
@@ -432,6 +440,7 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
 
 输出会给你一份完整 JSON，通常包含：
 
+- `schema_version`
 - `content_id`（通用内容 ID，B站场景下通常就是 BV 号）
 - `bvid`（兼容字段；非 B站站点未必存在）
 - `title`
@@ -442,6 +451,8 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
 - `notion_url`
 - `download_url`
 - `metadata_path`
+- `last_success_stage`
+- `last_error_code`
 - `verification`
 - `cleanup`
 
@@ -466,6 +477,15 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
   --url "<链接>" \
   --page-id "<notion_page_id>" \
   --replace-children
+```
+
+如果你只想先做预检、确认目标页没跑偏：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
+  --url "<链接>" \
+  --page-id "<notion_page_id>" \
+  --dry-run
 ```
 
 ---
@@ -493,7 +513,22 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
   --markdown-file /path/to/summary.md
 ```
 
+如果你只想先看这次会 append 多少 blocks：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
+  --page-id "NOTION_PAGE_ID" \
+  --markdown-file /path/to/summary.md \
+  --dry-run
+```
+
 如果你已经有 `metadata_path`，也可以后续自己从 metadata 里取 `page_id`。
+
+summary 真写入后，metadata 中会记录：
+- `summary_rollback_manifest`
+- `summary.appended_block_ids`
+
+这意味着如果总结明显写错了，后续可以回滚，而不用手工一条条删。
 
 ---
 
@@ -510,6 +545,9 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py verify \
 - 是否存在“正文”标题
 - 是否有正文段落
 - 是否存在总结区（开启 `--require-summary` 时）
+
+> 说明：当前 `verify` 仍以页面结构检查为主；
+> 更严格的“summary 是否跑题 / transcript 是否质量异常”校验，后续可以继续加强。
 
 校验不通过会非 0 退出。
 
@@ -537,7 +575,20 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
 
 ---
 
-### 8）清理临时文件 `cleanup`
+### 8）回滚最近一次总结写入 `rollback-summary`
+
+如果总结写错了，或者明显基于错误 transcript 生成，可以直接按 metadata 里的 rollback manifest 回滚：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py rollback-summary \
+  --metadata /path/to/<content-id>.metadata.json
+```
+
+它会 archive 最近一次 summary append 写进去的 blocks。
+
+---
+
+### 9）清理临时文件 `cleanup`
 
 只删 wav / txt：
 
