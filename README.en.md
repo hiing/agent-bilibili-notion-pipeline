@@ -408,6 +408,14 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
   --cleanup-mode temp
 ```
 
+If you want to preview the plan and perform Notion preflight checks without writing yet:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py run \
+  --url "https://b23.tv/xxxxx" \
+  --dry-run
+```
+
 If you already have a Markdown summary prepared:
 
 ```bash
@@ -431,6 +439,7 @@ This executes the full common workflow:
 
 The JSON output usually contains:
 
+- `schema_version`
 - `content_id` (generic content ID; in Bilibili flows this is usually the BV id)
 - `bvid` (compatibility field; may be absent outside Bilibili)
 - `title`
@@ -441,6 +450,8 @@ The JSON output usually contains:
 - `notion_url`
 - `download_url`
 - `metadata_path`
+- `last_success_stage`
+- `last_error_code`
 - `verification`
 - `cleanup`
 
@@ -465,6 +476,15 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
   --url "<link>" \
   --page-id "<notion_page_id>" \
   --replace-children
+```
+
+If you only want to preflight-check the target page before any write:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py prepare \
+  --url "<link>" \
+  --page-id "<notion_page_id>" \
+  --dry-run
 ```
 
 ---
@@ -493,6 +513,21 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
   --markdown-file /path/to/summary.md
 ```
 
+If you only want to preview how many blocks would be appended:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py append-summary \
+  --page-id "NOTION_PAGE_ID" \
+  --markdown-file /path/to/summary.md \
+  --dry-run
+```
+
+Once a summary is actually written, metadata records:
+- `summary_rollback_manifest`
+- `summary.appended_block_ids`
+
+So if the summary is obviously wrong, you can roll it back instead of deleting blocks by hand.
+
 ---
 
 ### 6) Verify the page with `verify`
@@ -508,6 +543,9 @@ It checks:
 - body heading exists
 - transcript paragraphs exist
 - summary-related sections exist (when `--require-summary` is enabled)
+
+> Note: `verify` currently focuses on structural checks first.
+> Stricter topic / transcript-quality validation can be added later, but it is not pretending to fully judge semantic correctness yet.
 
 The command exits non-zero when verification fails.
 
@@ -535,7 +573,20 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py resume \
 
 ---
 
-### 8) Cleanup with explicit modes
+### 8) Roll back the most recent summary write with `rollback-summary`
+
+If a summary was written based on the wrong transcript, or clearly drifted off-topic, you can roll back the last appended summary blocks via metadata:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py rollback-summary \
+  --metadata /path/to/<content-id>.metadata.json
+```
+
+This archives the blocks recorded in the latest summary rollback manifest.
+
+---
+
+### 9) Cleanup with explicit modes
 
 Delete wav / transcript only:
 
@@ -552,6 +603,51 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
   --metadata /path/to/<content-id>.metadata.json \
   --mode all
 ```
+
+---
+
+### Failure / recovery notes
+
+This pipeline is no longer designed as a write-and-pray script.
+It already has some recovery-oriented behavior built in.
+
+#### Dry-run first when the target page matters
+Use `--dry-run` with `run`, `prepare`, `resume`, or `append-summary` when:
+- you are targeting an existing Notion page
+- you want to inspect planned writes first
+- you want preflight checks before touching the page
+
+#### Use `state` before guessing
+If a long run stopped halfway, check:
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py state \
+  --metadata /path/to/<content-id>.metadata.json
+```
+
+This is the fastest way to see:
+- current state
+- latest successful stage
+- whether transcript / local file still exist
+- what the next suggested action is
+
+#### Use `resume` instead of rerunning blindly
+If download/transcription already finished, prefer `resume` over starting from scratch.
+That preserves metadata continuity and avoids duplicate work.
+
+#### Use `rollback-summary` when the summary is wrong
+If transcript body is correct but the appended summary is wrong, do not manually clean blocks one by one.
+Use the rollback manifest already saved in metadata.
+
+#### Watch `last_error_code`
+Recent runs now persist stage-aware error hints such as:
+- `last_success_stage`
+- `last_error_code`
+
+That makes it easier to distinguish:
+- write failures
+- verify failures
+- recovery candidates
 
 ---
 

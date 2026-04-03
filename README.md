@@ -608,6 +608,53 @@ python skill/bilibili-notion-pipeline/scripts/pipeline.py cleanup \
 
 ---
 
+### Failure / Recovery 指南
+
+这条流水线现在已经不该被理解成“写了就算，错了手删”的脚本。
+它已经开始具备恢复能力，建议按下面的方式用。
+
+#### 1）目标页重要时，先 `--dry-run`
+当你：
+- 指向一个已有 Notion 页面
+- 想先看写入计划
+- 想先做 preflight 再决定是否落笔
+
+就先用 `--dry-run`，而不是直接写。
+
+#### 2）别猜，先跑 `state`
+如果长任务中途断了，先看：
+
+```bash
+python skill/bilibili-notion-pipeline/scripts/pipeline.py state \
+  --metadata /path/to/<content-id>.metadata.json
+```
+
+它能最快告诉你：
+- 当前状态
+- 最近成功阶段
+- 本地 transcript / mp4 是否还在
+- 下一步建议动作是什么
+
+#### 3）优先 `resume`，别无脑重跑
+如果下载、转写已经完成，就尽量 `resume`，别从头再跑一遍。
+这样更省时间，也更不容易把 metadata 和远端页面写乱。
+
+#### 4）总结写错了，用 `rollback-summary`
+如果正文没问题，只是总结写偏了、写错了、基于错误 transcript 生成了，别手工一条条删 block。
+直接用 metadata 里的 rollback manifest 回滚。
+
+#### 5）留意 `last_error_code`
+最近一次运行现在会记录：
+- `last_success_stage`
+- `last_error_code`
+
+这能帮你快速区分：
+- 是写入前就挂了
+- 是 verify 没过
+- 还是已经具备恢复条件
+
+---
+
 ## 典型工作流
 
 可以把它理解成一条顺流而下的线：
