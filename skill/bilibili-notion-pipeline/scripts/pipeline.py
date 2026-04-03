@@ -8,6 +8,8 @@ import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -49,6 +51,33 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+@dataclass
+class PipelineError(Exception):
+    code: str
+    stage: str
+    message: str
+    retryable: bool = False
+    details: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "code": self.code,
+            "stage": self.stage,
+            "message": self.message,
+            "retryable": self.retryable,
+        }
+        if self.details:
+            payload["details"] = self.details
+        return payload
+
+    def __str__(self) -> str:
+        return f"[{self.stage}:{self.code}] {self.message}"
+
+
 def progress(message: str) -> None:
     print(f"[pipeline] {message}", file=sys.stderr, flush=True)
 
@@ -58,8 +87,17 @@ def slug_title(text: str, max_len: int = 120) -> str:
     return text[:max_len].rstrip(" ._") or "video"
 
 
-def run(cmd: List[str]) -> None:
-    subprocess.run(cmd, check=True)
+def run(cmd: List[str], stage: str = "command") -> None:
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        raise PipelineError(
+            code=f"{stage.upper()}_FAILED",
+            stage=stage,
+            message=f"Command failed: {' '.join(cmd)}",
+            retryable=False,
+            details={"returncode": e.returncode},
+        ) from e
 
 
 def extract_bvid(value: str, info: Optional[Dict[str, Any]] = None) -> str:
@@ -156,7 +194,7 @@ def extract_audio(video_path: Path, bvid: str) -> Path:
     run([
         "ffmpeg", "-y", "-i", str(video_path),
         "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", str(wav_path),
-    ])
+    ], stage="extract_audio")
     return wav_path
 
 
@@ -182,7 +220,7 @@ def split_audio_segments(wav_path: Path, bvid: str, segment_seconds: int) -> Lis
         "ffmpeg", "-y", "-i", str(wav_path),
         "-f", "segment", "-segment_time", str(segment_seconds),
         "-c", "copy", str(segment_pattern),
-    ])
+    ], stage="split_audio")
     return sorted(TEMP_DIR.glob(f"{bvid}_seg_*.wav"))
 
 
@@ -247,7 +285,7 @@ def transcribe_audio(wav_path: Path, bvid: str) -> Path:
                 "--language", WHISPER_LANGUAGE,
                 "--output_dir", str(TEMP_DIR),
                 "--output_format", "txt",
-            ])
+            ], stage="transcribe")
             raw_txt = TEMP_DIR / f"{seg_path.stem}.txt"
             text_parts.append(raw_txt.read_text(encoding="utf-8"))
 
@@ -306,7 +344,13 @@ def notion_headers() -> Dict[str, str]:
 
 
 def rt(text: str) -> List[Dict[str, Any]]:
-    return [{"type": "text", "text": {"content": text[:2000]}}]
+    parts: List[Dict[str, Any]] = []
+    remaining = text
+    while remaining:
+        chunk = remaining[:1900]
+        parts.append({"type": "text", "text": {"content": chunk}})
+        remaining = remaining[1900:]
+    return parts or [{"type": "text", "text": {"content": ""}}]
 
 
 def page_url(page_id: str) -> str:
@@ -427,6 +471,9 @@ def metadata_path_for_bvid(bvid: str) -> Path:
 
 def save_metadata(payload: Dict[str, Any], bvid: str, meta_path: Optional[Path] = None) -> Path:
     target = meta_path or metadata_path_for_bvid(bvid)
+    payload.setdefault("schema_version", 1)
+    payload.setdefault("created_at", now_iso())
+    payload["updated_at"] = now_iso()
     payload["metadata_path"] = str(target)
     write_json(target, payload)
     return target
@@ -487,7 +534,9 @@ def verify_page(page_id: str, require_summary: bool = False) -> Dict[str, Any]:
 
 
 def load_metadata(path: Path) -> Dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    meta = json.loads(path.read_text(encoding="utf-8"))
+    meta.setdefault("schema_version", 1)
+    return meta
 
 
 def existing_path(meta: Dict[str, Any], key: str) -> Optional[Path]:
@@ -554,9 +603,47 @@ def state_report(meta: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def append_summary_to_notion(page_id: str, markdown: str) -> Dict[str, Any]:
+def set_stage(meta: Dict[str, Any], state: str, last_success_stage: str) -> None:
+    meta["state"] = state
+    meta["last_success_stage"] = last_success_stage
+    meta["last_error_code"] = None
+
+
+def record_error(meta: Dict[str, Any], error: PipelineError) -> None:
+    meta["last_error_code"] = error.code
+    meta["last_error_stage"] = error.stage
+    meta["last_error_message"] = error.message
+
+
+def preflight_page_check(page_id: str, expected_url: Optional[str], dry_run: bool = False) -> Dict[str, Any]:
+    headers = notion_headers()
+    resp = requests.get(f"https://api.notion.com/v1/pages/{page_id}", headers=headers, timeout=60)
+    resp.raise_for_status()
+    page = resp.json()
+    props = page.get("properties", {})
+    actual_url = None
+    if isinstance(props.get("URL"), dict):
+        actual_url = props.get("URL", {}).get("url")
+    report = {
+        "page_id": page_id,
+        "actual_url": actual_url,
+        "expected_url": expected_url,
+        "ok": True,
+        "warnings": [],
+    }
+    if expected_url and actual_url and actual_url != expected_url:
+        report["ok"] = False
+        report["warnings"].append("URL mismatch between target page and current source url")
+    if dry_run:
+        report["mode"] = "dry-run"
+    return report
+
+
+def append_summary_to_notion(page_id: str, markdown: str, dry_run: bool = False) -> Dict[str, Any]:
     progress("追加 Markdown 总结到 Notion")
     blocks = markdown_to_blocks(markdown)
+    if dry_run:
+        return {"page_id": page_id, "appended_blocks": len(blocks), "mode": "dry-run"}
     notion_append_blocks(page_id, blocks)
     return {"page_id": page_id, "appended_blocks": len(blocks)}
 
@@ -599,6 +686,7 @@ def prepare_pipeline(
     replace_children: bool,
     meta_path: Optional[Path] = None,
     existing: Optional[Dict[str, Any]] = None,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     meta: Dict[str, Any] = dict(existing or {})
     meta["source_url"] = url
@@ -614,13 +702,13 @@ def prepare_pipeline(
         bvid = extract_bvid(video_url if "BV" in video_url else url, info)
         platform = detect_platform(video_url or url, info)
         meta.update({
-            "state": "info_resolved",
             "platform": platform,
             "content_id": bvid,
             "bvid": bvid if str(bvid).startswith("BV") else meta.get("bvid"),
             "title": title,
             "video_url": video_url,
         })
+        set_stage(meta, "info_resolved", "resolve")
         meta_path = save_metadata(meta, bvid, meta_path)
     else:
         bvid = meta.get("content_id") or meta["bvid"]
@@ -633,38 +721,63 @@ def prepare_pipeline(
     if not local_file:
         progress("下载视频")
         local_file = download_video(url, title, bvid)
-        meta.update({"state": "downloaded", "local_file": str(local_file)})
+        meta.update({"local_file": str(local_file)})
+        set_stage(meta, "downloaded", "download")
         save_metadata(meta, bvid, meta_path)
 
     wav_path = existing_path(meta, "wav_path")
     if not wav_path:
         progress("抽取音频")
         wav_path = extract_audio(local_file, bvid)
-        meta.update({"state": "audio_extracted", "wav_path": str(wav_path)})
+        meta.update({"wav_path": str(wav_path)})
+        set_stage(meta, "audio_extracted", "extract_audio")
         save_metadata(meta, bvid, meta_path)
 
     transcript_path = existing_path(meta, "transcript_path")
     if not transcript_path:
         progress("转写音频")
         transcript_path = transcribe_audio(wav_path, bvid)
-        meta.update({"state": "transcribed", "transcript_path": str(transcript_path)})
+        meta.update({"transcript_path": str(transcript_path)})
+        set_stage(meta, "transcribed", "transcribe")
         save_metadata(meta, bvid, meta_path)
 
     if not meta.get("download_url"):
         progress("上传视频")
         meta["download_url"] = upload_video(local_file)
-        meta["state"] = "uploaded"
+        set_stage(meta, "uploaded", "upload")
         save_metadata(meta, bvid, meta_path)
 
     target_page_id = page_id or meta.get("page_id")
+    if target_page_id:
+        meta["preflight"] = preflight_page_check(target_page_id, expected_url=video_url, dry_run=dry_run)
+        if not meta["preflight"].get("ok"):
+            raise PipelineError(
+                code="NOTION_PAGE_PREFLIGHT_FAILED",
+                stage="notion_write",
+                message="Target Notion page failed preflight checks",
+                retryable=False,
+                details=meta["preflight"],
+            )
+        if dry_run:
+            save_metadata(meta, bvid, meta_path)
+            return load_metadata(meta_path)
+
     if not meta.get("page_id"):
         progress("创建或更新 Notion 页面")
+        if dry_run:
+            meta.update({
+                "state": "page_ready",
+                "requested_page_id": target_page_id,
+                "dry_run": True,
+            })
+            save_metadata(meta, bvid, meta_path)
+            return load_metadata(meta_path)
         page = notion_create_or_update_page(title, video_url, meta.get("download_url"), target_page_id)
         meta.update({
-            "state": "page_ready",
             "page_id": page["id"],
             "notion_url": page.get("url") or page_url(page["id"]),
         })
+        set_stage(meta, "page_ready", "notion_page")
         save_metadata(meta, bvid, meta_path)
     else:
         target_page_id = meta["page_id"]
@@ -672,15 +785,21 @@ def prepare_pipeline(
     if replace_children and not meta.get("children_archived"):
         progress("归档旧页面 children")
         notion_archive_all_children(target_page_id)
-        meta.update({"state": "children_archived", "children_archived": True})
+        meta.update({"children_archived": True})
+        set_stage(meta, "children_archived", "notion_archive")
         save_metadata(meta, bvid, meta_path)
 
     if not meta.get("written_transcript_blocks"):
         progress("写入字幕正文 blocks")
         transcript_text = transcript_path.read_text(encoding="utf-8")
         blocks = transcript_blocks(video_url, meta.get("download_url"), transcript_text)
+        if dry_run:
+            meta.update({"dry_run": True, "planned_transcript_blocks": len(blocks)})
+            save_metadata(meta, bvid, meta_path)
+            return load_metadata(meta_path)
         notion_append_blocks(target_page_id, blocks)
-        meta.update({"state": "prepared", "written_transcript_blocks": len(blocks)})
+        meta.update({"written_transcript_blocks": len(blocks)})
+        set_stage(meta, "prepared", "write_transcript_blocks")
         save_metadata(meta, bvid, meta_path)
 
     return load_metadata(meta_path)
@@ -694,15 +813,18 @@ def resolve_page_id(page_id: Optional[str], metadata: Optional[str]) -> str:
     raise RuntimeError("page_id is required")
 
 
-def maybe_append_summary(meta: Dict[str, Any], markdown: Optional[str]) -> Dict[str, Any]:
+def maybe_append_summary(meta: Dict[str, Any], markdown: Optional[str], dry_run: bool = False) -> Dict[str, Any]:
     if not markdown:
         return meta
     if meta.get("summary_appended_blocks"):
         return meta
-    result = append_summary_to_notion(meta["page_id"], markdown)
+    result = append_summary_to_notion(meta["page_id"], markdown, dry_run=dry_run)
     meta["summary"] = result
     meta["summary_appended_blocks"] = result["appended_blocks"]
-    meta["state"] = "summary_appended"
+    if not dry_run:
+        set_stage(meta, "summary_appended", "append_summary")
+    else:
+        meta["dry_run"] = True
     save_metadata(meta, meta.get("content_id") or meta.get("bvid", "metadata"), Path(meta["metadata_path"]))
     return meta
 
@@ -716,13 +838,17 @@ def finalize_pipeline(meta: Dict[str, Any], require_summary: bool, cleanup_mode:
         progress(f"清理本地文件 ({cleanup_mode})")
         meta["cleanup"] = cleanup_from_meta(meta, cleanup_mode)
 
-    meta["state"] = "completed" if verification["ok"] else "verification_failed"
+    if verification["ok"]:
+        set_stage(meta, "completed", "verify")
+    else:
+        meta["state"] = "verification_failed"
+        meta["last_error_code"] = "VERIFY_FAILED"
     save_metadata(meta, meta["bvid"], Path(meta["metadata_path"]))
     return meta
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
-    payload = prepare_pipeline(args.url, args.page_id, args.replace_children)
+    payload = prepare_pipeline(args.url, args.page_id, args.replace_children, dry_run=args.dry_run)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
@@ -734,7 +860,7 @@ def cmd_append_summary(args: argparse.Namespace) -> None:
         markdown = args.text
     else:
         raise RuntimeError("Provide --markdown-file or --text")
-    result = append_summary_to_notion(page_id, markdown)
+    result = append_summary_to_notion(page_id, markdown, dry_run=args.dry_run)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -773,6 +899,7 @@ def cmd_resume(args: argparse.Namespace) -> None:
         args.replace_children or bool(existing.get("replace_children")),
         meta_path=meta_path,
         existing=existing,
+        dry_run=args.dry_run,
     )
 
     summary_markdown: Optional[str] = None
@@ -780,7 +907,10 @@ def cmd_resume(args: argparse.Namespace) -> None:
         summary_markdown = Path(args.markdown_file).read_text(encoding="utf-8")
     elif args.text:
         summary_markdown = args.text
-    meta = maybe_append_summary(meta, summary_markdown)
+    meta = maybe_append_summary(meta, summary_markdown, dry_run=args.dry_run)
+    if args.dry_run:
+        print(json.dumps(meta, ensure_ascii=False, indent=2))
+        return
     meta = finalize_pipeline(meta, require_summary=bool(summary_markdown) or args.require_summary, cleanup_mode=args.cleanup_mode)
     print(json.dumps(meta, ensure_ascii=False, indent=2))
     if not meta["verification"]["ok"]:
@@ -788,7 +918,7 @@ def cmd_resume(args: argparse.Namespace) -> None:
 
 
 def cmd_run(args: argparse.Namespace) -> None:
-    meta = prepare_pipeline(args.url, args.page_id, args.replace_children)
+    meta = prepare_pipeline(args.url, args.page_id, args.replace_children, dry_run=args.dry_run)
 
     summary_markdown: Optional[str] = None
     if args.markdown_file:
@@ -796,7 +926,10 @@ def cmd_run(args: argparse.Namespace) -> None:
     elif args.text:
         summary_markdown = args.text
 
-    meta = maybe_append_summary(meta, summary_markdown)
+    meta = maybe_append_summary(meta, summary_markdown, dry_run=args.dry_run)
+    if args.dry_run:
+        print(json.dumps(meta, ensure_ascii=False, indent=2))
+        return
     meta = finalize_pipeline(meta, require_summary=bool(summary_markdown) or args.require_summary, cleanup_mode=args.cleanup_mode)
     print(json.dumps(meta, ensure_ascii=False, indent=2))
     if not meta["verification"]["ok"]:
@@ -811,6 +944,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--url", required=True, help="Video URL (Bilibili/b23 primary; also usable with YouTube and other yt-dlp-supported sites)")
     p.add_argument("--page-id", help="Existing Notion page id")
     p.add_argument("--replace-children", action="store_true", help="Archive existing top-level children before writing transcript")
+    p.add_argument("--dry-run", action="store_true", help="Preview actions and preflight checks without writing to Notion")
     p.set_defaults(func=cmd_prepare)
 
     p = sub.add_parser("append-summary", help="append markdown summary to Notion")
@@ -819,6 +953,7 @@ def build_parser() -> argparse.ArgumentParser:
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--markdown-file", help="Path to markdown file")
     group.add_argument("--text", help="Raw markdown text")
+    p.add_argument("--dry-run", action="store_true", help="Preview summary append without writing")
     p.set_defaults(func=cmd_append_summary)
 
     p = sub.add_parser("verify", help="read back and verify Notion page structure")
@@ -846,6 +981,7 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--text", help="Optional raw markdown summary text to append")
     p.add_argument("--require-summary", action="store_true", help="Require summary-related sections during verification")
     p.add_argument("--cleanup-mode", choices=["none", "temp", "all"], default="temp", help="Cleanup mode after verification")
+    p.add_argument("--dry-run", action="store_true", help="Preview resume actions without writing/cleanup")
     p.set_defaults(func=cmd_resume)
 
     p = sub.add_parser("run", help="one-shot pipeline: prepare -> optional summary -> verify -> cleanup")
@@ -857,6 +993,7 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--text", help="Optional raw markdown summary text to append")
     p.add_argument("--require-summary", action="store_true", help="Require summary-related sections during verification")
     p.add_argument("--cleanup-mode", choices=["none", "temp", "all"], default="temp", help="Cleanup mode after verification")
+    p.add_argument("--dry-run", action="store_true", help="Preview full pipeline actions without writing/cleanup")
     p.set_defaults(func=cmd_run)
 
     return parser
@@ -865,7 +1002,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except PipelineError as e:
+        payload = {"ok": False, "error": e.to_dict()}
+        print(json.dumps(payload, ensure_ascii=False, indent=2), file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -4,8 +4,17 @@ import re
 from typing import List, Dict
 
 
+MAX_TEXT_CHARS = 1900
+
+
 def _rt(text: str) -> list[dict]:
-    return [{"type": "text", "text": {"content": text[:2000]}}]
+    parts: list[dict] = []
+    remaining = text
+    while remaining:
+        chunk = remaining[:MAX_TEXT_CHARS]
+        parts.append({"type": "text", "text": {"content": chunk}})
+        remaining = remaining[MAX_TEXT_CHARS:]
+    return parts or [{"type": "text", "text": {"content": ""}}]
 
 
 def _block(kind: str, text: str = "") -> dict:
