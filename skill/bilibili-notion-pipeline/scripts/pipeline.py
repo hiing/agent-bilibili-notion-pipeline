@@ -40,6 +40,16 @@ ASR_SEGMENT_SECONDS = int(os.getenv("ASR_SEGMENT_SECONDS", "600"))
 ASR_AUTO_SEGMENT_MINUTES = int(os.getenv("ASR_AUTO_SEGMENT_MINUTES", "20"))
 
 sys.path.insert(0, str(SCRIPT_DIR))
+from notion_client import (  # noqa: E402
+    append_blocks as notion_append_blocks,
+    archive_all_children as notion_archive_all_children,
+    archive_blocks as notion_archive_blocks,
+    create_or_update_page as notion_create_or_update_page,
+    get_page as notion_get_page,
+    list_children as notion_list_children,
+    notion_headers,
+    page_url,
+)
 from notion_markdown import markdown_to_blocks  # noqa: E402
 
 
@@ -333,17 +343,6 @@ def upload_video(video_path: Path) -> Optional[str]:
     raise RuntimeError(f"Upload succeeded but no public URL found: {payload}")
 
 
-def notion_headers() -> Dict[str, str]:
-    if not NOTION_API_KEY:
-        raise RuntimeError("NOTION_API_KEY is required")
-    return {
-        "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
-    }
-
-
-def rt(text: str) -> List[Dict[str, Any]]:
     parts: List[Dict[str, Any]] = []
     remaining = text
     while remaining:
@@ -353,93 +352,7 @@ def rt(text: str) -> List[Dict[str, Any]]:
     return parts or [{"type": "text", "text": {"content": ""}}]
 
 
-def page_url(page_id: str) -> str:
-    return f"https://www.notion.so/{page_id.replace('-', '')}"
-
-
-def notion_create_or_update_page(title: str, video_url: str, download_url: Optional[str], page_id: Optional[str]) -> Dict[str, Any]:
-    headers = notion_headers()
-    props: Dict[str, Any] = {
-        "title": {"title": [{"text": {"content": f"{title} - 整理字幕"}}]},
-        "URL": {"url": video_url},
-    }
-    if download_url:
-        props["download_url"] = {"url": download_url}
-
-    if page_id:
-        resp = requests.patch(
-            f"https://api.notion.com/v1/pages/{page_id}",
-            headers=headers,
-            json={"properties": props},
-            timeout=60,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        data.setdefault("url", page_url(page_id))
-        return data
-
-    if not NOTION_DATABASE_ID:
-        raise RuntimeError("NOTION_DATABASE_ID is required when creating a new page")
-
-    resp = requests.post(
-        "https://api.notion.com/v1/pages",
-        headers=headers,
-        json={"parent": {"database_id": NOTION_DATABASE_ID}, "properties": props},
-        timeout=60,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def notion_list_children(block_id: str) -> List[Dict[str, Any]]:
-    headers = notion_headers()
-    items: List[Dict[str, Any]] = []
-    cursor: Optional[str] = None
-
-    while True:
-        params = {"page_size": 100}
-        if cursor:
-            params["start_cursor"] = cursor
-        resp = requests.get(
-            f"https://api.notion.com/v1/blocks/{block_id}/children",
-            headers=headers,
-            params=params,
-            timeout=60,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        items.extend(data.get("results", []))
-        if not data.get("has_more"):
-            break
-        cursor = data.get("next_cursor")
-    return items
-
-
-def notion_archive_all_children(page_id: str) -> None:
-    headers = notion_headers()
-    for child in notion_list_children(page_id):
-        requests.patch(
-            f"https://api.notion.com/v1/blocks/{child['id']}",
-            headers=headers,
-            json={"archived": True},
-            timeout=60,
-        ).raise_for_status()
-
-
-def notion_append_blocks(page_id: str, blocks: List[Dict[str, Any]]) -> None:
-    headers = notion_headers()
-    for i in range(0, len(blocks), 100):
-        chunk = blocks[i:i + 100]
-        resp = requests.patch(
-            f"https://api.notion.com/v1/blocks/{page_id}/children",
-            headers=headers,
-            json={"children": chunk},
-            timeout=60,
-        )
-        resp.raise_for_status()
-
-
-def transcript_blocks(video_url: str, download_url: Optional[str], transcript_text: str) -> List[Dict[str, Any]]:
+def rt(text: str) -> List[Dict[str, Any]]:
     blocks: List[Dict[str, Any]] = [
         {"object": "block", "type": "heading_1", "heading_1": {"rich_text": rt("整理字幕")}},
         {
@@ -498,7 +411,7 @@ def block_plain_text(block: Dict[str, Any]) -> str:
 
 
 def verify_page(page_id: str, require_summary: bool = False) -> Dict[str, Any]:
-    children = notion_list_children(page_id)
+    children = notion_list_children(NOTION_API_KEY, page_id)
     texts = [block_plain_text(block).strip() for block in children]
     headings = [
         text for block, text in zip(children, texts)
@@ -616,10 +529,7 @@ def record_error(meta: Dict[str, Any], error: PipelineError) -> None:
 
 
 def preflight_page_check(page_id: str, expected_url: Optional[str], dry_run: bool = False) -> Dict[str, Any]:
-    headers = notion_headers()
-    resp = requests.get(f"https://api.notion.com/v1/pages/{page_id}", headers=headers, timeout=60)
-    resp.raise_for_status()
-    page = resp.json()
+    page = notion_get_page(NOTION_API_KEY, page_id)
     props = page.get("properties", {})
     actual_url = None
     if isinstance(props.get("URL"), dict):
@@ -644,8 +554,13 @@ def append_summary_to_notion(page_id: str, markdown: str, dry_run: bool = False)
     blocks = markdown_to_blocks(markdown)
     if dry_run:
         return {"page_id": page_id, "appended_blocks": len(blocks), "mode": "dry-run"}
-    notion_append_blocks(page_id, blocks)
-    return {"page_id": page_id, "appended_blocks": len(blocks)}
+    appended_ids = notion_append_blocks(NOTION_API_KEY, page_id, blocks)
+    return {
+        "page_id": page_id,
+        "appended_blocks": len(blocks),
+        "appended_block_ids": appended_ids,
+        "rollback_manifest": {"page_id": page_id, "block_ids": appended_ids},
+    }
 
 
 def cleanup_from_meta(meta: Dict[str, Any], mode: str = "temp") -> Dict[str, Any]:
@@ -772,7 +687,7 @@ def prepare_pipeline(
             })
             save_metadata(meta, bvid, meta_path)
             return load_metadata(meta_path)
-        page = notion_create_or_update_page(title, video_url, meta.get("download_url"), target_page_id)
+        page = notion_create_or_update_page(NOTION_API_KEY, title, video_url, meta.get("download_url"), target_page_id, NOTION_DATABASE_ID)
         meta.update({
             "page_id": page["id"],
             "notion_url": page.get("url") or page_url(page["id"]),
@@ -784,7 +699,7 @@ def prepare_pipeline(
 
     if replace_children and not meta.get("children_archived"):
         progress("归档旧页面 children")
-        notion_archive_all_children(target_page_id)
+        notion_archive_all_children(NOTION_API_KEY, target_page_id)
         meta.update({"children_archived": True})
         set_stage(meta, "children_archived", "notion_archive")
         save_metadata(meta, bvid, meta_path)
@@ -797,8 +712,11 @@ def prepare_pipeline(
             meta.update({"dry_run": True, "planned_transcript_blocks": len(blocks)})
             save_metadata(meta, bvid, meta_path)
             return load_metadata(meta_path)
-        notion_append_blocks(target_page_id, blocks)
-        meta.update({"written_transcript_blocks": len(blocks)})
+        appended_ids = notion_append_blocks(NOTION_API_KEY, target_page_id, blocks)
+        meta.update({
+            "written_transcript_blocks": len(blocks),
+            "transcript_write_manifest": {"page_id": target_page_id, "block_ids": appended_ids},
+        })
         set_stage(meta, "prepared", "write_transcript_blocks")
         save_metadata(meta, bvid, meta_path)
 
@@ -821,12 +739,31 @@ def maybe_append_summary(meta: Dict[str, Any], markdown: Optional[str], dry_run:
     result = append_summary_to_notion(meta["page_id"], markdown, dry_run=dry_run)
     meta["summary"] = result
     meta["summary_appended_blocks"] = result["appended_blocks"]
+    if result.get("rollback_manifest"):
+        meta["summary_rollback_manifest"] = result["rollback_manifest"]
     if not dry_run:
         set_stage(meta, "summary_appended", "append_summary")
     else:
         meta["dry_run"] = True
     save_metadata(meta, meta.get("content_id") or meta.get("bvid", "metadata"), Path(meta["metadata_path"]))
     return meta
+
+
+def rollback_last_summary(meta: Dict[str, Any]) -> Dict[str, Any]:
+    manifest = meta.get("summary_rollback_manifest") or {}
+    block_ids = manifest.get("block_ids") or []
+    if not block_ids:
+        raise PipelineError(
+            code="ROLLBACK_MANIFEST_MISSING",
+            stage="rollback",
+            message="No summary rollback manifest found in metadata",
+            retryable=False,
+        )
+    result = notion_archive_blocks(NOTION_API_KEY, block_ids)
+    meta["rollback"] = result
+    set_stage(meta, "summary_rolled_back", "rollback")
+    save_metadata(meta, meta.get("content_id") or meta.get("bvid", "metadata"), Path(meta["metadata_path"]))
+    return result
 
 
 def finalize_pipeline(meta: Dict[str, Any], require_summary: bool, cleanup_mode: str) -> Dict[str, Any]:
@@ -885,6 +822,12 @@ def cmd_cleanup(args: argparse.Namespace) -> None:
 def cmd_state(args: argparse.Namespace) -> None:
     meta = load_metadata(Path(args.metadata))
     print(json.dumps(state_report(meta), ensure_ascii=False, indent=2))
+
+
+def cmd_rollback_summary(args: argparse.Namespace) -> None:
+    meta = load_metadata(Path(args.metadata))
+    result = rollback_last_summary(meta)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def cmd_resume(args: argparse.Namespace) -> None:
@@ -971,6 +914,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("state", help="show saved pipeline state from metadata")
     p.add_argument("--metadata", required=True, help="metadata json from prepare/run")
     p.set_defaults(func=cmd_state)
+
+    p = sub.add_parser("rollback-summary", help="archive blocks added by the last summary append")
+    p.add_argument("--metadata", required=True, help="metadata json containing summary rollback manifest")
+    p.set_defaults(func=cmd_rollback_summary)
 
     p = sub.add_parser("resume", help="resume from metadata, then optional summary/verify/cleanup")
     p.add_argument("--metadata", required=True, help="metadata json from prepare/run")
